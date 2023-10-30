@@ -70,6 +70,8 @@ def cell_click(event, row, col):
 
     if mode == "Select Mode":
         grid_state.setActiveGridCoord(row, col, not grid_state.activeGrid[row, col])
+        if not grid_state.activeGrid[row, col]: # if no longer active, set reward to 0
+            grid_state.setReward(row, col, 0.0)
         grid[row][col]['color'] = 'white' if grid_state.activeGrid[row, col] else 'black'
         update_grid()
     elif mode.lower() == "reward mode":
