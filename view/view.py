@@ -1,5 +1,6 @@
 import tkinter as tk
 import numpy as np
+from model.grid import Grid
 
 # Constants for grid dimensions and cell size
 GRID_WIDTH = 10
@@ -51,9 +52,9 @@ last_toggled_cell = None  # Keep track of the last toggled cell to prevent flick
 
 selected_cell = None  # Variable to keep track of the selected cell
 
-# Initialize the rewards and selected states using NumPy arrays
-reward_array = np.zeros((GRID_HEIGHT, GRID_WIDTH))
-selected_states = np.zeros((GRID_HEIGHT, GRID_WIDTH), dtype=bool)
+# Initialize the grid state to handle internal logic
+num_actions = 1
+grid_state = Grid(GRID_HEIGHT, GRID_WIDTH, num_actions)
 
 # Create labels for rewards and mode display
 label_reward = tk.Label(root, text="Reward: 0.0")
@@ -68,8 +69,8 @@ def cell_click(event, row, col):
     mode = modes[mode_var.get()]
 
     if mode == "Select Mode":
-        selected_states[row, col] = not selected_states[row, col]
-        grid[row][col]['color'] = 'white' if selected_states[row, col] else 'black'
+        grid_state.setActiveGridCoord(row, col, not grid_state.activeGrid[row, col])
+        grid[row][col]['color'] = 'white' if grid_state.activeGrid[row, col] else 'black'
         update_grid()
     elif mode.lower() == "reward mode":
         # Unhighlight the previously selected cell
@@ -80,7 +81,7 @@ def cell_click(event, row, col):
         selected_cell = (row, col)
         canvas.itemconfig(cells[row][col], width=3)
         # Update the reward label
-        label_reward.config(text=f"Reward: {reward_array[row, col]:.2f}")
+        label_reward.config(text=f"Reward: {grid_state.rewards[row, col]:.2f}")
 
 # Function to draw while dragging (for coloring)
 def draw(event):
@@ -92,7 +93,7 @@ def draw(event):
         mode = modes[mode_var.get()]
         current_cell = (row, col)
         if mode == "Select Mode" and current_cell != last_toggled_cell:
-            selected_states[row, col] = not eraser_active
+            grid_state.setActiveGridCoord(row, col, not eraser_active)
             last_toggled_cell = current_cell
             update_grid()
 
@@ -103,15 +104,15 @@ def set_reward(event):
         row, col = selected_cell
         try:
             reward = float(entry_reward.get())
-            reward_array[row, col] = reward
+            grid_state.setReward(row, col, reward)
 
             # Recalculate the maximum absolute reward
             global max_abs_reward
-            max_abs_reward = np.abs(reward_array).max()
+            max_abs_reward = np.abs(grid_state.rewards).max()
 
             for r in range(GRID_HEIGHT):
                 for c in range(GRID_WIDTH):
-                    grid[r][c]['color'] = get_color_by_reward(reward_array[r, c])
+                    grid[r][c]['color'] = get_color_by_reward(grid_state.rewards[r, c])
 
             label_reward.config(text=f"Reward: {reward:.2f}")
 
@@ -145,8 +146,8 @@ def toggle_eraser():
 def update_grid():
     for row in range(GRID_HEIGHT):
         for col in range(GRID_WIDTH):
-            if selected_states[row, col]:
-                cell_color = get_color_by_reward(reward_array[row, col])
+            if grid_state.activeGrid[row, col]:
+                cell_color = get_color_by_reward(grid_state.rewards[row, col])
             else:
                 cell_color = 'black'  # Set the color to black if the cell is unselected
             canvas.itemconfig(cells[row][col], fill=cell_color)
