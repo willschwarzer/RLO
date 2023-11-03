@@ -25,10 +25,23 @@ def get_color_by_reward(reward):
 
 # Helper function to get saturated color
 def get_saturated_color(base_color, saturation):
+    # Ensure lightness is between 0 and 1
+    saturation = max(0, min(saturation, 1))
+
     if base_color == "green":
-        return f'#{int(255 - (255 - 0) * saturation):02x}FF{int(255 - (255 - 0) * saturation):02x}'
+        # Start with the full green
+        green_value = 255
+        # Calculate how much to add to the red and blue channels to lighten the color
+        additional_value = int(255 * (1 - saturation))
+        return f'#{additional_value:02x}{green_value:02x}{additional_value:02x}'
     elif base_color == "red":
-        return f'#FF{int(255 - (255 * saturation)):02x}00'
+        # Start with the full red
+        red_value = 255
+        # Calculate how much to add to the green and blue channels to lighten the color
+        additional_value = int(255 * (1 - saturation))
+        return f'#{red_value:02x}{additional_value:02x}{additional_value:02x}'
+    else:
+        return '#FFFFFF'  # Fallback to white if an unrecognized color is passed
 
 
 # Initialize the grid with colors based on reward values
@@ -142,7 +155,13 @@ def stop_drawing(event):
 def toggle_eraser():
     global eraser_active
     eraser_active = not eraser_active
-    eraser_button.config(text="Unselect squares" if eraser_active else "Select squares")
+    # Update button and label texts based on the mode
+    if eraser_active:
+        eraser_button.config(text="Select squares")
+        mode_label.config(text="Currently erasing squares")
+    else:
+        eraser_button.config(text="Unselect squares")
+        mode_label.config(text="Currently selecting squares")
 
 # Function to update the grid display
 def update_grid():
@@ -186,6 +205,9 @@ def update_reward_ui():
 for idx, m in enumerate(modes):
     r = tk.Radiobutton(root, text=m, variable=mode_var, value=idx, command=update_ui)
     r.pack(anchor='w')
+
+mode_label = tk.Label(root, text="Currently selecting squares")
+mode_label.pack()
 
 eraser_button = tk.Button(root, text="Unselect squares", command=toggle_eraser)
 eraser_button.pack()
