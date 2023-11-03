@@ -53,7 +53,7 @@ reward_mode = False
 current_reward = 0.0
 
 # Modes setup
-modes = ["Select Mode", "Transition Mode", "Reward Mode"]
+modes = ["Select Mode", "Transition Mode", "Reward Mode", "Start Prob Mode"]
 
 eraser_active = False
 # eraser_active.set(False)  # Default to not erasing
@@ -73,6 +73,12 @@ grid_state = Grid(GRID_HEIGHT, GRID_WIDTH, num_actions)
 label_reward = tk.Label(root, text="Reward: 0.0")
 label_reward.pack()
 
+label_start_prob = tk.Label(root, text="Start Probability: 0.0")
+entry_start_prob = tk.Entry(root)
+
+start_probs = np.zeros((GRID_HEIGHT, GRID_WIDTH))
+start_weights = np.zeros((GRID_HEIGHT, GRID_WIDTH))
+
 # Entry for setting rewards (only in reward mode)
 entry_reward = tk.Entry(root)
 entry_reward.pack()
@@ -82,7 +88,7 @@ def cell_click(event, row, col):
     mode = modes[mode_var.get()]
 
     if mode == "Select Mode":
-        grid_state.setActiveGridCoord(row, col, not grid_state.activeGrid[row, col])
+        grid_state.setActiveGridCoord(row, col, not eraser_active)
         if not grid_state.activeGrid[row, col]: # if no longer active, set reward to 0
             grid_state.setReward(row, col, 0.0)
         grid[row][col]['color'] = 'white' if grid_state.activeGrid[row, col] else 'black'
@@ -97,6 +103,42 @@ def cell_click(event, row, col):
         canvas.itemconfig(cells[row][col], width=3)
         # Update the reward label
         label_reward.config(text=f"Reward: {grid_state.rewards[row, col]:.2f}")
+    elif mode.lower() == "start prob mode":
+        # ... similar logic to reward mode ...
+        # Unhighlight the previously selected cell
+        if selected_cell:
+            r, c = selected_cell
+            canvas.itemconfig(cells[r][c], width=1)
+        # Highlight the newly selected cell
+        selected_cell = (row, col)
+        canvas.itemconfig(cells[row][col], width=3)
+        # Update the start probability label
+        label_start_prob.config(text=f"Start Probability: {start_probs[row, col]:.2f}")
+
+def set_start_prob(event):
+    global selected_cell
+    mode = modes[mode_var.get()]
+    if mode.lower() == "start prob mode" and selected_cell:
+        row, col = selected_cell
+        try:
+            update_status("")
+            prob = float(entry_start_prob.get())
+            if not 0 <= prob:
+                update_status("Probability must be between 0 and 1")
+                return
+            start_probs[row, col] = prob
+            normalize_start_probs()
+            label_start_prob.config(text=f"Start Probability: {prob:.2f}")
+            entry_start_prob.delete(0, tk.END)
+            selected_cell = None
+            update_grid()
+        except ValueError as e:
+            tk.messagebox.showerror("Invalid Input", str(e))
+
+def normalize_start_probs():
+    prob_sum = np.sum(start_probs)
+    if prob_sum > 0:
+        np.divide(start_probs, prob_sum, out=start_probs)
 
 # Function to draw while dragging (for coloring)
 def draw(event):
@@ -109,6 +151,8 @@ def draw(event):
         current_cell = (row, col)
         if mode == "Select Mode" and current_cell != last_toggled_cell:
             grid_state.setActiveGridCoord(row, col, not eraser_active)
+            if not grid_state.activeGrid[row, col]: # if no longer active, set reward to 0
+                grid_state.setReward(row, col, 0.0)
             last_toggled_cell = current_cell
             update_grid()
 
@@ -174,18 +218,30 @@ def update_grid():
             canvas.itemconfig(cells[row][col], fill=cell_color)
             
 def update_ui():
+    update_status("")
     mode = modes[mode_var.get()]
     if mode.lower() == "reward mode":
         label_reward.pack()
         entry_reward.pack()
-        eraser_button.pack_forget()  # Hide the eraser button in reward mode
+        label_start_prob.pack_forget()
+        entry_start_prob.pack_forget()
+        eraser_button.pack_forget()
+    elif mode.lower() == "start prob mode":
+        label_start_prob.pack()
+        entry_start_prob.pack()
+        label_reward.pack_forget()
+        entry_reward.pack_forget()
+        eraser_button.pack_forget()
     else:
         label_reward.pack_forget()
         entry_reward.pack_forget()
+        label_start_prob.pack_forget()
+        entry_start_prob.pack_forget()
         if mode == "Select Mode":
-            eraser_button.pack()  # Show the eraser button only in select mode
+            eraser_button.pack()
         else:
             eraser_button.pack_forget()
+
     
     # If mode is "Select Mode", default to selecting squares
     if mode == "Select Mode":
@@ -193,14 +249,12 @@ def update_ui():
         eraser_active = False
         eraser_button.config(text="Unselect squares")
 
-def update_reward_ui():
-    mode = modes[mode_var.get()]
-    if mode.lower() == "reward mode":
-        label_reward.pack()
-        entry_reward.pack()
+def update_status(message):
+    if message:
+        status_label.config(text=message)
+        status_label.pack()  # Show the label with the message
     else:
-        label_reward.pack_forget()
-        entry_reward.pack_forget()
+        status_label.pack_forget()  # Hide the label if there's no message
 
 for idx, m in enumerate(modes):
     r = tk.Radiobutton(root, text=m, variable=mode_var, value=idx, command=update_ui)
@@ -212,6 +266,9 @@ mode_label.pack()
 eraser_button = tk.Button(root, text="Unselect squares", command=toggle_eraser)
 eraser_button.pack()
 
+status_label = tk.Label(root, text="", fg="red")
+status_label.pack()
+
 # Hide reward-related UI at the start
 update_ui()
 
@@ -221,6 +278,8 @@ canvas.pack()
 
 # Bind the Enter key to the reward entry
 entry_reward.bind('<Return>', set_reward)
+
+entry_start_prob.bind('<Return>', set_start_prob)
 
 # Create a 2D list to store the cell items
 cells = [[None for _ in range(GRID_WIDTH)] for _ in range(GRID_HEIGHT)]
