@@ -133,6 +133,45 @@ entry_reward = tk.Entry(root)
 # Create Arrows list to hold every arrow drawn
 arrows = []
 
+# Transition Arrow Drawing
+arrow_start_coord = None
+selected_arrow = None
+
+def draw_arrow(start, end):
+    x1, y1 = start
+    x2, y2 = end
+
+    # Calculate the coordinates for arrow positions
+    x1_pixel = y1 * CELL_SIZE + CELL_SIZE // 2
+    y1_pixel = x1 * CELL_SIZE + CELL_SIZE // 2
+    x2_pixel = y2 * CELL_SIZE + CELL_SIZE // 2
+    y2_pixel = x2 * CELL_SIZE + CELL_SIZE // 2
+    # Draw the arrow
+    arrow = canvas.create_line(x1_pixel, y1_pixel, x2_pixel, y2_pixel, arrow=tk.LAST, fill='#BF40BF') # purple
+    canvas.tag_bind(arrow, '<Button-1>', lambda event, a=arrow: select_arrow(event, a))
+    arrows.append(arrow)
+
+def select_arrow(event, arrow):
+    global selected_arrow
+    # Highlight the selected arrow (e.g., change its color)
+    if selected_arrow:
+        # Deselect the previously selected arrow (change its color back)
+        canvas.itemconfig(selected_arrow, fill="#BF40BF")
+    if eraser_active:
+        canvas.delete(arrow)
+        arrows.remove(arrow)
+        return
+    selected_arrow = arrow
+    canvas.itemconfig(selected_arrow, fill="#FF0000")
+
+def clear_arrows():
+    global arrows
+    global arrow_start_coord
+    arrow_start_coord = None
+    for arrow in arrows:
+        canvas.delete(arrow)
+    arrows.clear()
+
 def cell_click(event, row, col):
     global selected_cell, highlighted_cell
     mode = modes[mode_var.get()]
@@ -158,28 +197,33 @@ def cell_click(event, row, col):
         # For 'reward mode', update the reward label
         elif mode.lower() == "reward mode":
             label_reward.config(text=f"Reward: {grid_state.rewards[row, col]:.2f}")
-
-# Transition Arrow Drawing
-arrow_start_coord = None
-
-def draw_arrow(start, end):
-    x1, y1 = start
-    x2, y2 = end
-
-    # Calculate the coordinates for arrow positions
-    x1_pixel = y1 * CELL_SIZE + CELL_SIZE // 2
-    y1_pixel = x1 * CELL_SIZE + CELL_SIZE // 2
-    x2_pixel = y2 * CELL_SIZE + CELL_SIZE // 2
-    y2_pixel = x2 * CELL_SIZE + CELL_SIZE // 2
-
-    # Draw the arrow
-    arrow = canvas.create_line(x1_pixel, y1_pixel, x2_pixel, y2_pixel, arrow=tk.LAST)
-    arrows.append(arrow)
-
-def clear_arrows():
-    for arrow in arrows:
-        canvas.delete(arrow)
-    arrows.clear()
+    elif mode.lower() == "transition mode":
+        global arrow_start_coord
+        # Check if there is an arrow at the specified row and col
+        if arrow_start_coord is None and grid_state.activeGrid[row, col] and not eraser_active:
+            # Unhighlight the previously selected cell
+            selected_cell = (row, col)
+            if highlighted_cell:
+                prev_row, prev_col = highlighted_cell
+                canvas.itemconfig(cells[prev_row][prev_col], width=1)  # Unhighlight the previous cell
+            highlighted_cell = selected_cell
+            # Highlight the newly selected cell
+            canvas.itemconfig(cells[row][col], width=3)
+            arrow_start_coord = (row, col)
+        elif arrow_start_coord is not None and grid_state.activeGrid[row, col] and (row, col) != arrow_start_coord and not eraser_active:
+            # Remove highlighted cell
+            if highlighted_cell:
+                canvas.itemconfig(cells[highlighted_cell[0]][highlighted_cell[1]], width=1)
+                highlighted_cell = None
+                selected_cell = None
+            draw_arrow(arrow_start_coord, (row, col))
+            arrow_start_coord = None
+        elif arrow_start_coord is not None and grid_state.activeGrid[row, col] and (row, col) == arrow_start_coord:
+            # Remove highlighted cell
+            if highlighted_cell:
+                canvas.itemconfig(cells[highlighted_cell[0]][highlighted_cell[1]], width=1)
+                highlighted_cell = None
+                selected_cell = None
 
 def set_start_prob(event):
     global selected_cell
@@ -234,13 +278,6 @@ def draw(event):
                 grid_state.setReward(row, col, 0.0)
             last_toggled_cell = current_cell
             update_grid()
-        elif mode.lower() == "transition mode":
-            global arrow_start_coord
-            if arrow_start_coord is None:
-                arrow_start_coord = (row, col)
-            else:
-                draw_arrow(arrow_start_coord, (row, col))
-                arrow_start_coord = None
                 
 
 def set_reward(event):
@@ -289,12 +326,21 @@ def toggle_eraser():
     global eraser_active
     eraser_active = not eraser_active
     # Update button and label texts based on the mode
-    if eraser_active:
-        eraser_button.config(text="Select squares")
-        mode_label.config(text="Currently erasing squares")
-    else:
-        eraser_button.config(text="Unselect squares")
-        mode_label.config(text="Currently selecting squares")
+    mode = modes[mode_var.get()]
+    if mode.lower() == "select mode":
+        if eraser_active:
+            eraser_button.config(text="Select squares")
+            mode_label.config(text="Currently erasing squares")
+        else:
+            eraser_button.config(text="Unselect squares")
+            mode_label.config(text="Currently selecting squares")
+    elif mode.lower() == "transition mode":
+        if eraser_active:
+            eraser_button.config(text="Create transition arrows")
+            mode_label.config(text="Currently erasing arrows")
+        else:
+            eraser_button.config(text="Delete transition arrows")
+            mode_label.config(text="Currently drawing arrows")
 
 # Function to update the grid display
 def update_grid():
@@ -364,7 +410,7 @@ def update_ui():
         mode_label.config(text="Currently drawing arrows")
         pack_things_in_order(show_mode_label=True, show_eraser=True, show_clear=True)
         eraser_active = False
-        eraser_button.config(text="Unselect Arrows")
+        eraser_button.config(text="Delete transition arrows")
 
 def clear():
     if messagebox.askokcancel("Confirmation", "Are you sure you want to clear?"):
@@ -381,6 +427,8 @@ def clear():
             # Recalculate the maximum absolute reward
             global max_abs_reward
             max_abs_reward = np.abs(grid_state.rewards).max()
+        elif mode.lower() == 'transition mode':
+            clear_arrows()
         update_grid()
 
 def update_status(message, color="red"):
