@@ -325,6 +325,7 @@ def update_ui():
         # eraser_button.pack_forget()
         value = grid_state.rewards[selected_cell[0], selected_cell[1]] if selected_cell is not None else 0.0
         label_reward.config(text=f"Reward: {value:.2f}")
+        entry_reward.delete(0, tk.END)
         pack_things_in_order(show_reward=True, show_clear=True)
     elif mode.lower() == "start prob mode":
         # label_start_prob.pack()
@@ -335,6 +336,7 @@ def update_ui():
         # check if start probs sum to 1
         value = start_probs[selected_cell[0], selected_cell[1]] if selected_cell is not None else 0.0
         label_start_prob.config(text=f"Start Probability: {value:.2f}")
+        entry_start_prob.delete(0, tk.END)
         check_start_probs(normalize=False)
         pack_things_in_order(show_start_prob=True, show_clear=True, show_status=True)
     elif mode.lower() == "select mode":
