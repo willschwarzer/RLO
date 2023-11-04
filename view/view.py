@@ -54,13 +54,12 @@ def pack_things_in_order(show_reward=False, show_start_prob=False, show_mode_lab
 def get_color_by_reward(reward):
     global max_abs_reward
     # Calculate saturation based on the magnitude of the reward
-    saturation = abs(reward) / max_abs_reward
+    saturation = abs(reward) / (max_abs_reward + 1e-6)
     base_color = 'green' if reward > 0 else ('red' if reward < 0 else 'white')
     if base_color == 'white':
         return base_color
     return get_saturated_color(base_color, saturation)
 
-# Helper function to get saturated color
 # Helper function to get saturated color
 def get_saturated_color(base_color, saturation):
     # Ensure lightness is between 0 and 1
@@ -131,6 +130,9 @@ start_weights = np.zeros((GRID_HEIGHT, GRID_WIDTH))
 # Entry for setting rewards (only in reward mode)
 entry_reward = tk.Entry(root)
 
+# Create Arrows list to hold every arrow drawn
+arrows = []
+
 def cell_click(event, row, col):
     global selected_cell, highlighted_cell
     mode = modes[mode_var.get()]
@@ -156,6 +158,28 @@ def cell_click(event, row, col):
         # For 'reward mode', update the reward label
         elif mode.lower() == "reward mode":
             label_reward.config(text=f"Reward: {grid_state.rewards[row, col]:.2f}")
+
+# Transition Arrow Drawing
+arrow_start_coord = None
+
+def draw_arrow(start, end):
+    x1, y1 = start
+    x2, y2 = end
+
+    # Calculate the coordinates for arrow positions
+    x1_pixel = y1 * CELL_SIZE + CELL_SIZE // 2
+    y1_pixel = x1 * CELL_SIZE + CELL_SIZE // 2
+    x2_pixel = y2 * CELL_SIZE + CELL_SIZE // 2
+    y2_pixel = x2 * CELL_SIZE + CELL_SIZE // 2
+
+    # Draw the arrow
+    arrow = canvas.create_line(x1_pixel, y1_pixel, x2_pixel, y2_pixel, arrow=tk.LAST)
+    arrows.append(arrow)
+
+def clear_arrows():
+    for arrow in arrows:
+        canvas.delete(arrow)
+    arrows.clear()
 
 def set_start_prob(event):
     global selected_cell
@@ -210,6 +234,14 @@ def draw(event):
                 grid_state.setReward(row, col, 0.0)
             last_toggled_cell = current_cell
             update_grid()
+        elif mode.lower() == "transition mode":
+            global arrow_start_coord
+            if arrow_start_coord is None:
+                arrow_start_coord = (row, col)
+            else:
+                draw_arrow(arrow_start_coord, (row, col))
+                arrow_start_coord = None
+                
 
 def set_reward(event):
     global selected_cell
@@ -281,6 +313,7 @@ def update_grid():
             canvas.itemconfig(cells[row][col], fill=cell_color)
             
 def update_ui():
+    global selected_cell, highlighted_cell, eraser_active
     update_grid()
     update_status("")
     mode = modes[mode_var.get()]
@@ -290,6 +323,8 @@ def update_ui():
         # label_start_prob.pack_forget()
         # entry_start_prob.pack_forget()
         # eraser_button.pack_forget()
+        value = grid_state.rewards[selected_cell[0], selected_cell[1]] if selected_cell is not None else 0.0
+        label_reward.config(text=f"Reward: {value:.2f}")
         pack_things_in_order(show_reward=True, show_clear=True)
     elif mode.lower() == "start prob mode":
         # label_start_prob.pack()
@@ -298,9 +333,11 @@ def update_ui():
         # entry_reward.pack_forget()
         # eraser_button.pack_forget()
         # check if start probs sum to 1
+        value = start_probs[selected_cell[0], selected_cell[1]] if selected_cell is not None else 0.0
+        label_start_prob.config(text=f"Start Probability: {value:.2f}")
         check_start_probs(normalize=False)
         pack_things_in_order(show_start_prob=True, show_clear=True, show_status=True)
-    else:
+    elif mode.lower() == "select mode":
         # label_reward.pack_forget()
         # entry_reward.pack_forget()
         # label_start_prob.pack_forget()
@@ -313,12 +350,19 @@ def update_ui():
         # update mode label to say "Currently selecting squares"
         mode_label.config(text="Currently selecting squares")
         pack_things_in_order(show_mode_label=True, show_eraser=True)
-    
-    # If mode is "Select Mode", default to selecting squares
-    if mode == "Select Mode":
-        global eraser_active
         eraser_active = False
         eraser_button.config(text="Unselect squares")
+
+        if highlighted_cell:
+            row, col = highlighted_cell
+            canvas.itemconfig(cells[row][col], width=1)
+            highlighted_cell = None
+        selected_cell = None
+    elif mode.lower() == "transition mode":
+        mode_label.config(text="Currently drawing arrows")
+        pack_things_in_order(show_mode_label=True, show_eraser=True, show_clear=True)
+        eraser_active = False
+        eraser_button.config(text="Unselect Arrows")
 
 def clear():
     if messagebox.askokcancel("Confirmation", "Are you sure you want to clear?"):
