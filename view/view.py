@@ -1,4 +1,5 @@
 import tkinter as tk
+from tkinter import messagebox
 import numpy as np
 from model.grid import Grid
 
@@ -11,7 +12,43 @@ CELL_SIZE = 40
 root = tk.Tk()
 root.title("Gridworld Game")
 
+# Create a canvas for the grid
+canvas = tk.Canvas(root, width=GRID_WIDTH * CELL_SIZE, height=GRID_HEIGHT * CELL_SIZE)
+
+# Create a 2D list to store the cell items
+cells = [[None for _ in range(GRID_WIDTH)] for _ in range(GRID_HEIGHT)]
+
 max_abs_reward = 1.0
+
+def pack_things_in_order(show_reward=False, show_start_prob=False, show_mode_label=False, show_eraser=False, show_status=False, show_clear=False):
+    for r in radio_buttons:
+        r.pack(anchor='w')
+    canvas.pack()
+
+    # first forget everything
+    mode_label.pack_forget()
+    label_reward.pack_forget()
+    entry_reward.pack_forget()
+    label_start_prob.pack_forget()
+    entry_start_prob.pack_forget()
+    eraser_button.pack_forget()
+    clear_button.pack_forget()
+    status_label.pack_forget()
+
+    if show_mode_label:
+        mode_label.pack()
+    if show_reward:
+        label_reward.pack()
+        entry_reward.pack()
+    if show_start_prob:
+        label_start_prob.pack()
+        entry_start_prob.pack()
+    if show_eraser:
+        eraser_button.pack()
+    if show_status:
+        status_label.pack()
+    if show_clear:
+        clear_button.pack()
 
 # Determine the color based on reward value
 def get_color_by_reward(reward):
@@ -24,24 +61,35 @@ def get_color_by_reward(reward):
     return get_saturated_color(base_color, saturation)
 
 # Helper function to get saturated color
+# Helper function to get saturated color
 def get_saturated_color(base_color, saturation):
     # Ensure lightness is between 0 and 1
     saturation = max(0, min(saturation, 1))
 
+    # Initialize RGB values
+    r, g, b = 0, 0, 0
+
     if base_color == "green":
-        # Start with the full green
-        green_value = 255
-        # Calculate how much to add to the red and blue channels to lighten the color
+        # Full green, adjust red and blue
+        g = 255
         additional_value = int(255 * (1 - saturation))
-        return f'#{additional_value:02x}{green_value:02x}{additional_value:02x}'
+        r = additional_value
+        b = additional_value
     elif base_color == "red":
-        # Start with the full red
-        red_value = 255
-        # Calculate how much to add to the green and blue channels to lighten the color
+        # Full red, adjust green and blue
+        r = 255
         additional_value = int(255 * (1 - saturation))
-        return f'#{red_value:02x}{additional_value:02x}{additional_value:02x}'
+        g = additional_value
+        b = additional_value
+    elif base_color == "blue":
+        # Full blue, adjust red and green
+        b = 255
+        additional_value = int(255 * (1 - saturation))
+        r = additional_value
+        g = additional_value
     else:
         return '#FFFFFF'  # Fallback to white if an unrecognized color is passed
+    return f'#{r:02x}{g:02x}{b:02x}'  # Return the hex color code
 
 
 # Initialize the grid with colors based on reward values
@@ -54,6 +102,7 @@ current_reward = 0.0
 
 # Modes setup
 modes = ["Select Mode", "Transition Mode", "Reward Mode", "Start Prob Mode"]
+mode_text = ["Add/remove states", "Specify transition probabilities", "Specify rewards", "Specify start probabilities"]
 
 eraser_active = False
 # eraser_active.set(False)  # Default to not erasing
@@ -64,6 +113,7 @@ mode_var.set(0)  # Default to Select Mode
 last_toggled_cell = None  # Keep track of the last toggled cell to prevent flickering
 
 selected_cell = None  # Variable to keep track of the selected cell
+highlighted_cell = None  # Variable to keep track of the highlighted cell
 
 # Initialize the grid state to handle internal logic
 num_actions = 1
@@ -71,7 +121,6 @@ grid_state = Grid(GRID_HEIGHT, GRID_WIDTH, num_actions)
 
 # Create labels for rewards and mode display
 label_reward = tk.Label(root, text="Reward: 0.0")
-label_reward.pack()
 
 label_start_prob = tk.Label(root, text="Start Probability: 0.0")
 entry_start_prob = tk.Entry(root)
@@ -81,10 +130,9 @@ start_weights = np.zeros((GRID_HEIGHT, GRID_WIDTH))
 
 # Entry for setting rewards (only in reward mode)
 entry_reward = tk.Entry(root)
-entry_reward.pack()
 
 def cell_click(event, row, col):
-    global selected_cell
+    global selected_cell, highlighted_cell
     mode = modes[mode_var.get()]
 
     if mode == "Select Mode":
@@ -93,52 +141,59 @@ def cell_click(event, row, col):
             grid_state.setReward(row, col, 0.0)
         grid[row][col]['color'] = 'white' if grid_state.activeGrid[row, col] else 'black'
         update_grid()
-    elif mode.lower() == "reward mode":
+    elif mode.lower() in ["start prob mode", "reward mode"]:
         # Unhighlight the previously selected cell
-        if selected_cell:
-            r, c = selected_cell
-            canvas.itemconfig(cells[r][c], width=1)
-        # Highlight the newly selected cell
         selected_cell = (row, col)
-        canvas.itemconfig(cells[row][col], width=3)
-        # Update the reward label
-        label_reward.config(text=f"Reward: {grid_state.rewards[row, col]:.2f}")
-    elif mode.lower() == "start prob mode":
-        # ... similar logic to reward mode ...
-        # Unhighlight the previously selected cell
-        if selected_cell:
-            r, c = selected_cell
-            canvas.itemconfig(cells[r][c], width=1)
+        if highlighted_cell and (row, col) != highlighted_cell:
+            prev_row, prev_col = highlighted_cell
+            canvas.itemconfig(cells[prev_row][prev_col], width=1)  # Unhighlight the previous cell
+        highlighted_cell = selected_cell
         # Highlight the newly selected cell
-        selected_cell = (row, col)
         canvas.itemconfig(cells[row][col], width=3)
-        # Update the start probability label
-        label_start_prob.config(text=f"Start Probability: {start_probs[row, col]:.2f}")
+        # For 'start prob mode', update the start probability label
+        if mode.lower() == "start prob mode":
+            label_start_prob.config(text=f"Start Probability: {start_probs[row, col]:.2f}")
+        # For 'reward mode', update the reward label
+        elif mode.lower() == "reward mode":
+            label_reward.config(text=f"Reward: {grid_state.rewards[row, col]:.2f}")
 
 def set_start_prob(event):
     global selected_cell
     mode = modes[mode_var.get()]
     if mode.lower() == "start prob mode" and selected_cell:
         row, col = selected_cell
+        if not grid_state.activeGrid[row, col]:
+            return
         try:
             update_status("")
             prob = float(entry_start_prob.get())
-            if not 0 <= prob:
+            if not 0 <= prob <= 1:
                 update_status("Probability must be between 0 and 1")
                 return
             start_probs[row, col] = prob
-            normalize_start_probs()
+            # normalize_start_probs()
+            # not normalizing for now
+            check_start_probs(normalize=False)
+            
             label_start_prob.config(text=f"Start Probability: {prob:.2f}")
             entry_start_prob.delete(0, tk.END)
             selected_cell = None
             update_grid()
         except ValueError as e:
-            tk.messagebox.showerror("Invalid Input", str(e))
+            # tk.messagebox.showerror("Invalid Input", str(e))
+            update_status("Invalid input")
 
-def normalize_start_probs():
+def check_start_probs(normalize=False):
     prob_sum = np.sum(start_probs)
-    if prob_sum > 0:
+    if prob_sum > 0 and normalize:
         np.divide(start_probs, prob_sum, out=start_probs)
+        return
+    if prob_sum > 1:
+        update_status(f"Sum of start probabilities: {prob_sum:.2f}", color="orange")
+    elif prob_sum < 1:
+        update_status(f"Sum of start probabilities: {prob_sum:.2f}", color="blue")
+    else:
+        update_status(f"Sum of start probabilities: {prob_sum:.2f}", color="green")
 
 # Function to draw while dragging (for coloring)
 def draw(event):
@@ -161,6 +216,8 @@ def set_reward(event):
     mode = modes[mode_var.get()]
     if mode.lower() == "reward mode" and selected_cell:
         row, col = selected_cell
+        if not grid_state.activeGrid[row, col]:
+            return
         try:
             reward = float(entry_reward.get())
             grid_state.setReward(row, col, reward)
@@ -209,39 +266,53 @@ def toggle_eraser():
 
 # Function to update the grid display
 def update_grid():
+    mode = modes[mode_var.get()]
     for row in range(GRID_HEIGHT):
         for col in range(GRID_WIDTH):
             if grid_state.activeGrid[row, col]:
-                cell_color = get_color_by_reward(grid_state.rewards[row, col])
+                if mode == "Start Prob Mode":
+                    # Normalize the start probability to [0, 1] for color saturation
+                    saturation = start_probs[row, col] / max(start_probs.max(), 1)
+                    cell_color = get_saturated_color("blue", saturation)
+                else:
+                    cell_color = get_color_by_reward(grid_state.rewards[row, col])
             else:
                 cell_color = 'black'  # Set the color to black if the cell is unselected
             canvas.itemconfig(cells[row][col], fill=cell_color)
             
 def update_ui():
+    update_grid()
     update_status("")
     mode = modes[mode_var.get()]
     if mode.lower() == "reward mode":
-        label_reward.pack()
-        entry_reward.pack()
-        label_start_prob.pack_forget()
-        entry_start_prob.pack_forget()
-        eraser_button.pack_forget()
+        # label_reward.pack()
+        # entry_reward.pack()
+        # label_start_prob.pack_forget()
+        # entry_start_prob.pack_forget()
+        # eraser_button.pack_forget()
+        pack_things_in_order(show_reward=True, show_clear=True)
     elif mode.lower() == "start prob mode":
-        label_start_prob.pack()
-        entry_start_prob.pack()
-        label_reward.pack_forget()
-        entry_reward.pack_forget()
-        eraser_button.pack_forget()
+        # label_start_prob.pack()
+        # entry_start_prob.pack()
+        # label_reward.pack_forget()
+        # entry_reward.pack_forget()
+        # eraser_button.pack_forget()
+        # check if start probs sum to 1
+        check_start_probs(normalize=False)
+        pack_things_in_order(show_start_prob=True, show_clear=True, show_status=True)
     else:
-        label_reward.pack_forget()
-        entry_reward.pack_forget()
-        label_start_prob.pack_forget()
-        entry_start_prob.pack_forget()
-        if mode == "Select Mode":
-            eraser_button.pack()
-        else:
-            eraser_button.pack_forget()
+        # label_reward.pack_forget()
+        # entry_reward.pack_forget()
+        # label_start_prob.pack_forget()
+        # entry_start_prob.pack_forget()
 
+        # if mode == "Select Mode":
+        #     eraser_button.pack()
+        # else:
+        #     eraser_button.pack_forget()
+        # update mode label to say "Currently selecting squares"
+        mode_label.config(text="Currently selecting squares")
+        pack_things_in_order(show_mode_label=True, show_eraser=True)
     
     # If mode is "Select Mode", default to selecting squares
     if mode == "Select Mode":
@@ -249,40 +320,53 @@ def update_ui():
         eraser_active = False
         eraser_button.config(text="Unselect squares")
 
-def update_status(message):
-    if message:
-        status_label.config(text=message)
-        status_label.pack()  # Show the label with the message
-    else:
-        status_label.pack_forget()  # Hide the label if there's no message
+def clear():
+    if messagebox.askokcancel("Confirmation", "Are you sure you want to clear?"):
+        mode = modes[mode_var.get()]
+        if mode.lower() == "start prob mode":
+            start_probs.fill(0.0)
+            check_start_probs(normalize=False)
+        elif mode.lower() == "reward mode":
+            grid_state.rewards.fill(0.0)
+            for r in range(GRID_HEIGHT):
+                for c in range(GRID_WIDTH):
+                    grid[r][c]['color'] = get_color_by_reward(grid_state.rewards[r, c])
+            label_reward.config(text="Reward: 0.0")
+            # Recalculate the maximum absolute reward
+            global max_abs_reward
+            max_abs_reward = np.abs(grid_state.rewards).max()
+        update_grid()
 
-for idx, m in enumerate(modes):
+def update_status(message, color="red"):
+    if message:
+        status_label.config(text=message, fg=color)  # Set the message and color
+        # status_label.pack()  # Show the label with the message
+    # else:
+    #     status_label.pack_forget()  # Hide the label if there's no message
+
+radio_buttons = []
+
+# for idx, m in enumerate(modes):
+for idx, m in enumerate(mode_text):
     r = tk.Radiobutton(root, text=m, variable=mode_var, value=idx, command=update_ui)
-    r.pack(anchor='w')
+    radio_buttons.append(r)
+    # r.pack(anchor='w')
 
 mode_label = tk.Label(root, text="Currently selecting squares")
-mode_label.pack()
 
 eraser_button = tk.Button(root, text="Unselect squares", command=toggle_eraser)
-eraser_button.pack()
+
+clear_button = tk.Button(root, text="Clear all", command=clear)
 
 status_label = tk.Label(root, text="", fg="red")
-status_label.pack()
 
 # Hide reward-related UI at the start
 update_ui()
-
-# Create a canvas for the grid
-canvas = tk.Canvas(root, width=GRID_WIDTH * CELL_SIZE, height=GRID_HEIGHT * CELL_SIZE)
-canvas.pack()
 
 # Bind the Enter key to the reward entry
 entry_reward.bind('<Return>', set_reward)
 
 entry_start_prob.bind('<Return>', set_start_prob)
-
-# Create a 2D list to store the cell items
-cells = [[None for _ in range(GRID_WIDTH)] for _ in range(GRID_HEIGHT)]
 
 # Populate the grid and bind click events
 for row in range(GRID_HEIGHT):
