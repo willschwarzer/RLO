@@ -240,6 +240,47 @@ def open_standard_actions_settings():
     # Close button
     tk.Button(action_window, text="Close", command=action_window.destroy).grid(row=7, columnspan=2)
 
+# Create Arrows list to hold every arrow drawn
+arrows = []
+
+# Transition Arrow Drawing
+arrow_start_coord = None
+selected_arrow = None
+
+def draw_arrow(start, end):
+    x1, y1 = start
+    x2, y2 = end
+
+    # Calculate the coordinates for arrow positions
+    x1_pixel = y1 * CELL_SIZE + CELL_SIZE // 2
+    y1_pixel = x1 * CELL_SIZE + CELL_SIZE // 2
+    x2_pixel = y2 * CELL_SIZE + CELL_SIZE // 2
+    y2_pixel = x2 * CELL_SIZE + CELL_SIZE // 2
+    # Draw the arrow
+    arrow = canvas.create_line(x1_pixel, y1_pixel, x2_pixel, y2_pixel, arrow=tk.LAST, fill='#BF40BF') # purple
+    canvas.tag_bind(arrow, '<Button-1>', lambda event, a=arrow: select_arrow(event, a))
+    arrows.append(arrow)
+
+def select_arrow(event, arrow):
+    global selected_arrow
+    # Highlight the selected arrow (e.g., change its color)
+    if selected_arrow:
+        # Deselect the previously selected arrow (change its color back)
+        canvas.itemconfig(selected_arrow, fill="#BF40BF")
+    if eraser_active:
+        canvas.delete(arrow)
+        arrows.remove(arrow)
+        return
+    selected_arrow = arrow
+    canvas.itemconfig(selected_arrow, fill="#FF0000")
+
+def clear_arrows():
+    global arrows
+    global arrow_start_coord
+    arrow_start_coord = None
+    for arrow in arrows:
+        canvas.delete(arrow)
+    arrows.clear()
 class TransitionProbabilitiesFrame(tk.Frame):
     def __init__(self, parent, *args, **kwargs):
         tk.Frame.__init__(self, parent, *args, **kwargs)
@@ -275,7 +316,32 @@ class TransitionProbabilitiesFrame(tk.Frame):
             text="Use Standard Action Probabilities", command=self.use_standard_action_probs, state='disabled')
         self.use_standard_action_probs_button.pack()
 
+        draw_arrow_button = tk.Button(self, text="Draw Missing Transition Arrows", command=self.draw_arrows)
+        draw_arrow_button.pack()
+
         self.updating = True
+
+    def draw_arrows(self):
+        global grid_state
+        for row in range(GRID_HEIGHT):
+            for col in range(GRID_WIDTH):
+                if grid_state.activeGrid[row, col]:
+                    action = int(action_var.get().split()[-1])
+                    probs = grid_state.actions[row, col, action, :]
+                    # draw up arrow if state above is active
+                    if row > 0 and grid_state.activeGrid[row-1, col] and probs[0] > 0:
+                        draw_arrow((row, col), (row-1, col))
+                    # draw down arrow if state below is active
+                    if row < GRID_HEIGHT-1 and grid_state.activeGrid[row+1, col] and probs[1] > 0:
+                        draw_arrow((row, col), (row+1, col))
+                    # draw right arrow if state to the right is active
+                    if col < GRID_WIDTH-1 and grid_state.activeGrid[row, col+1] and probs[2] > 0:
+                        draw_arrow((row, col), (row, col+1))
+                    # draw left arrow if state to the left is active
+                    if col > 0 and grid_state.activeGrid[row, col-1] and probs[3] > 0:
+                        draw_arrow((row, col), (row, col-1))
+                    # How do we handle stay arrow?
+
 
     def use_standard_action_probs(self):
         global selected_cell, action_var
@@ -363,48 +429,6 @@ trans_prob_frame = TransitionProbabilitiesFrame(root)
 action_var.trace("w", lambda *_: trans_prob_frame.load_probabilities())
 
 # standard_actions_button = tk.Button(root, text="Set Standard Actions", command=open_standard_actions_settings)
-
-# Create Arrows list to hold every arrow drawn
-arrows = []
-
-# Transition Arrow Drawing
-arrow_start_coord = None
-selected_arrow = None
-
-def draw_arrow(start, end):
-    x1, y1 = start
-    x2, y2 = end
-
-    # Calculate the coordinates for arrow positions
-    x1_pixel = y1 * CELL_SIZE + CELL_SIZE // 2
-    y1_pixel = x1 * CELL_SIZE + CELL_SIZE // 2
-    x2_pixel = y2 * CELL_SIZE + CELL_SIZE // 2
-    y2_pixel = x2 * CELL_SIZE + CELL_SIZE // 2
-    # Draw the arrow
-    arrow = canvas.create_line(x1_pixel, y1_pixel, x2_pixel, y2_pixel, arrow=tk.LAST, fill='#BF40BF') # purple
-    canvas.tag_bind(arrow, '<Button-1>', lambda event, a=arrow: select_arrow(event, a))
-    arrows.append(arrow)
-
-def select_arrow(event, arrow):
-    global selected_arrow
-    # Highlight the selected arrow (e.g., change its color)
-    if selected_arrow:
-        # Deselect the previously selected arrow (change its color back)
-        canvas.itemconfig(selected_arrow, fill="#BF40BF")
-    if eraser_active:
-        canvas.delete(arrow)
-        arrows.remove(arrow)
-        return
-    selected_arrow = arrow
-    canvas.itemconfig(selected_arrow, fill="#FF0000")
-
-def clear_arrows():
-    global arrows
-    global arrow_start_coord
-    arrow_start_coord = None
-    for arrow in arrows:
-        canvas.delete(arrow)
-    arrows.clear()
 
 def cell_click(event, row, col):
     global selected_cell, highlighted_cell
