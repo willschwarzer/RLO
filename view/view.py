@@ -191,6 +191,8 @@ entry_start_prob = tk.Entry(root)
 start_probs = np.zeros((GRID_HEIGHT, GRID_WIDTH))
 start_weights = np.zeros((GRID_HEIGHT, GRID_WIDTH))
 
+standard_transition_probs = np.array([0.2, 0.2, 0.2, 0.2, 0.2, 0.0])
+
 # Entry for setting rewards (only in reward mode)
 entry_reward = tk.Entry(root)
 
@@ -198,6 +200,45 @@ action_var = tk.StringVar()
 action_menu = ttk.Combobox(root, textvariable=action_var, state='readonly')
 action_menu['values'] = ['Action ' + str(i) for i in range(num_actions)]  # Assuming actions are indexed from 0
 action_menu.current(0)  # Set the default action
+
+def open_standard_actions_settings():
+    action_window = tk.Toplevel(root)
+    action_window.title("Standard Actions Settings")
+
+    # Variables for action probabilities
+    move_up_var = tk.DoubleVar(value=standard_transition_probs[0])
+    move_right_var = tk.DoubleVar(value=standard_transition_probs[1])  # Default values can be adjusted
+    move_left_var = tk.DoubleVar(value=standard_transition_probs[2])
+    move_down_var = tk.DoubleVar(value=standard_transition_probs[3])
+    stay_still_var = tk.DoubleVar(value=standard_transition_probs[4])
+    terminate_var = tk.DoubleVar(value=standard_transition_probs[5])
+
+    # Create and layout labels and entries for probabilities
+    tk.Label(action_window, text="Move Up Probability").grid(row=0, column=0)
+    tk.Entry(action_window, textvariable=move_up_var).grid(row=0, column=1)
+
+    tk.Label(action_window, text="Move Backwards Probability").grid(row=1, column=0)
+    tk.Entry(action_window, textvariable=move_down_var).grid(row=1, column=1)
+
+    tk.Label(action_window, text="Move Left Probability").grid(row=2, column=0)
+    tk.Entry(action_window, textvariable=move_left_var).grid(row=2, column=1)
+
+    tk.Label(action_window, text="Move Right Probability").grid(row=3, column=0)
+    tk.Entry(action_window, textvariable=move_right_var).grid(row=3, column=1)
+
+    tk.Label(action_window, text="Stay Still Probability").grid(row=4, column=0)
+    tk.Entry(action_window, textvariable=stay_still_var).grid(row=4, column=1)
+
+    tk.Label(action_window, text="Terminate Probability").grid(row=5, column=0)
+    tk.Entry(action_window, textvariable=terminate_var).grid(row=5, column=1)
+
+    # Save button
+    tk.Button(action_window, text="Save", command=lambda: save_standard_actions(
+        move_up_var, move_down_var, move_left_var, move_right_var, stay_still_var, terminate_var
+    )).grid(row=6, columnspan=2)
+
+    # Close button
+    tk.Button(action_window, text="Close", command=action_window.destroy).grid(row=7, columnspan=2)
 
 class TransitionProbabilitiesFrame(tk.Frame):
     def __init__(self, parent, *args, **kwargs):
@@ -226,6 +267,9 @@ class TransitionProbabilitiesFrame(tk.Frame):
         # Attach the update function to the probability variables
         for prob_var in self.prob_vars:
             prob_var.trace("w", self.update_probs)
+
+        standard_actions_button = tk.Button(self, text="Set Standard Actions", command=open_standard_actions_settings)
+        standard_actions_button.pack()
 
         self.updating = True
 
@@ -302,38 +346,7 @@ trans_prob_frame = TransitionProbabilitiesFrame(root)
 
 action_var.trace("w", lambda *_: trans_prob_frame.load_probabilities())
 
-def open_standard_actions_settings():
-    action_window = tk.Toplevel(root)
-    action_window.title("Standard Actions Settings")
-
-    # Variables for action probabilities
-    move_right_var = tk.DoubleVar(value=0.8)  # Default values can be adjusted
-    move_left_var = tk.DoubleVar(value=0.05)
-    move_back_var = tk.DoubleVar(value=0.05)
-    stay_still_var = tk.DoubleVar(value=0.1)
-
-    # Create and layout labels and entries for probabilities
-    tk.Label(action_window, text="Move Right Probability").grid(row=0, column=0)
-    tk.Entry(action_window, textvariable=move_right_var).grid(row=0, column=1)
-
-    tk.Label(action_window, text="Move Left Probability").grid(row=1, column=0)
-    tk.Entry(action_window, textvariable=move_left_var).grid(row=1, column=1)
-
-    tk.Label(action_window, text="Move Backwards Probability").grid(row=2, column=0)
-    tk.Entry(action_window, textvariable=move_back_var).grid(row=2, column=1)
-
-    tk.Label(action_window, text="Stay Still Probability").grid(row=3, column=0)
-    tk.Entry(action_window, textvariable=stay_still_var).grid(row=3, column=1)
-
-    # Save button
-    tk.Button(action_window, text="Save", command=lambda: save_standard_actions(move_right_var.get(), move_left_var.get(), move_back_var.get(), stay_still_var.get())).grid(row=4, columnspan=2)
-
-    # Close button
-    tk.Button(action_window, text="Close", command=action_window.destroy).grid(row=5, columnspan=2)
-
-standard_actions_button = tk.Button(root, text="Set Standard Actions", command=open_standard_actions_settings)
-
-
+# standard_actions_button = tk.Button(root, text="Set Standard Actions", command=open_standard_actions_settings)
 
 # Create Arrows list to hold every arrow drawn
 arrows = []
@@ -463,7 +476,30 @@ def save_transitions(grid, row, col, action_index, prob_values):
     # Ensure the sum of the first five probabilities (excluding the terminate probability) is <= 1
 
     # Save probabilities in the transitions array
-    grid.addActionList((row, col), action_index, prob_values)    
+    grid.addActionList((row, col), action_index, prob_values)
+
+def save_standard_actions(move_up_var, move_down_var, move_left_var, move_right_var, stay_still_var, terminate_var):
+    total_prob = 0
+    up_prob = move_up_var.get()
+    down_prob = move_down_var.get()
+    left_prob = move_left_var.get()
+    right_prob = move_right_var.get()
+    stay_prob = stay_still_var.get()
+    terminate_prob = terminate_var.get()
+    total_prob = up_prob + down_prob + left_prob + right_prob + stay_prob + terminate_prob
+    # so we don't need to check that sum is > 1
+    normalized_prob = [up_prob / total_prob,
+                       down_prob / total_prob,
+                       left_prob / total_prob,
+                       right_prob / total_prob,
+                       stay_prob / total_prob,
+                       terminate_prob / total_prob]
+    standard_transition_probs[0] = normalized_prob[0]
+    standard_transition_probs[1] = normalized_prob[1]
+    standard_transition_probs[2] = normalized_prob[2]
+    standard_transition_probs[3] = normalized_prob[3]
+    standard_transition_probs[4] = normalized_prob[4]
+    standard_transition_probs[5] = normalized_prob[5]
 
 #TODO delete
 def show_transition_table_old(row, col, action):
