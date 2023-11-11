@@ -268,10 +268,24 @@ class TransitionProbabilitiesFrame(tk.Frame):
         for prob_var in self.prob_vars:
             prob_var.trace("w", self.update_probs)
 
-        standard_actions_button = tk.Button(self, text="Set Standard Actions", command=open_standard_actions_settings)
+        standard_actions_button = tk.Button(self, text="Set Standard Action Probabilities", command=open_standard_actions_settings)
         standard_actions_button.pack()
 
+        self.use_standard_action_probs_button = tk.Button(self, 
+            text="Use Standard Action Probabilities", command=self.use_standard_action_probs, state='disabled')
+        self.use_standard_action_probs_button.pack()
+
         self.updating = True
+
+    def use_standard_action_probs(self):
+        global selected_cell, action_var
+        if selected_cell is None or action_var.get() is None:
+            return
+        row, col = selected_cell
+        action = int(action_var.get().split()[-1])
+        save_transitions(grid_state, row, col, action, standard_transition_probs)
+        self.load_probabilities()
+    
 
     def update_probs(self, name, *args):
         if not self.updating:
@@ -336,11 +350,13 @@ class TransitionProbabilitiesFrame(tk.Frame):
         for entry in self.entries:
             entry.config(state='normal')
         self.stay_entry.config(state='readonly')  # Stay entry should remain read-only
+        self.use_standard_action_probs_button.config(state='normal')
 
     def disable_entries(self):
         for entry in self.entries:
             entry.config(state='disabled')
         self.stay_entry.config(state='disabled')
+        self.use_standard_action_probs_button.config(state='disabled')
 
 trans_prob_frame = TransitionProbabilitiesFrame(root)
 
