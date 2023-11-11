@@ -32,3 +32,7 @@ class Grid:
     
     def addAction(self, coord, actionNum, direction, prob):
         self.actions[coord[0], coord[1], actionNum, direction] = prob
+
+    def addActionList(self, coord, actionNum, probList):
+        for i in range(len(probList)):
+            self.actions[coord[0], coord[1], actionNum, i] = probList[i]

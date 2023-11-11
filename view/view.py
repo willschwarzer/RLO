@@ -182,8 +182,6 @@ highlighted_cell = None  # Variable to keep track of the highlighted cell
 num_actions = 4
 grid_state = Grid(GRID_HEIGHT, GRID_WIDTH, num_actions)
 
-transitions = np.zeros((GRID_HEIGHT, GRID_WIDTH, num_actions, 6))
-
 # Create labels for rewards and mode display
 label_reward = tk.Label(root, text="Reward: 0.00")
 
@@ -261,7 +259,7 @@ class TransitionProbabilitiesFrame(tk.Frame):
             # raise ValueError("Sum of probabilities for North, South, East, West, and Stay must not exceed 1.")
             # we don't want to raise an error, instead we want to 
 
-        save_transitions(row, col, action, probs + [stay_prob])
+        save_transitions(grid_state, row, col, action, probs + [stay_prob])
 
     def get_probabilities(self):
         # Method to retrieve the probability values
@@ -278,7 +276,7 @@ class TransitionProbabilitiesFrame(tk.Frame):
 
         # Assuming you have a method in your model to get probabilities
         # Replace this with your actual method to retrieve probabilities
-        probs = transitions[row, col, action]
+        probs = grid_state.actions[row, col, action, :]
         print(probs)
 
         # Update the probability variables with the retrieved values
@@ -452,7 +450,7 @@ def cell_click(event, row, col):
     #     selected_cell = (row, col)
     #     trans_prob_frame.load_probabilities()
 
-def save_transitions(row, col, action_index, prob_values):
+def save_transitions(grid, row, col, action_index, prob_values):
     """
     Save the transition probabilities for a given cell and action.
 
@@ -465,7 +463,7 @@ def save_transitions(row, col, action_index, prob_values):
     # Ensure the sum of the first five probabilities (excluding the terminate probability) is <= 1
 
     # Save probabilities in the transitions array
-    transitions[row, col, action_index] = prob_values
+    grid.addActionList((row, col), action_index, prob_values)    
 
 #TODO delete
 def show_transition_table_old(row, col, action):
