@@ -426,7 +426,7 @@ def cell_click(event, row, col):
             else:
                 label_reward.config(text="Reward: 0.00")
         elif mode.lower() == "transition mode":
-            if selected_cell:
+            if selected_cell and grid_state.activeGrid[row, col]:
                 trans_prob_frame.enable_entries()
                 trans_prob_frame.load_probabilities()
             else:
