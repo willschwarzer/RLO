@@ -259,7 +259,7 @@ def draw_arrow(start, end):
     # Draw the arrow
     arrow = canvas.create_line(x1_pixel, y1_pixel, x2_pixel, y2_pixel, arrow=tk.LAST, fill='#BF40BF') # purple
     canvas.tag_bind(arrow, '<Button-1>', lambda event, a=arrow: select_arrow(event, a))
-    arrows[(x1_pixel,y1_pixel,x2_pixel,y2_pixel)] = arrow
+    arrows[[x1_pixel,y1_pixel,x2_pixel,y2_pixel]] = arrow
 
 def delete_arrow(start, end):
     x1, y1 = start
@@ -270,53 +270,11 @@ def delete_arrow(start, end):
     y1_pixel = x1 * CELL_SIZE + CELL_SIZE // 2
     x2_pixel = y2 * CELL_SIZE + CELL_SIZE // 2
     y2_pixel = x2 * CELL_SIZE + CELL_SIZE // 2
-    arrow_key = (x1_pixel,y1_pixel,x2_pixel,y2_pixel)
+    arrow_key = [x1_pixel,y1_pixel,x2_pixel,y2_pixel]
     # Draw the arrow
     if arrow_key in arrows.keys():
         canvas.delete(arrows[arrow_key])
         del arrows[arrow_key]
-
-def draw_stay_arrow(cell):
-    row, col = cell
-    # Calculate the center of the cell
-    center_x = col * CELL_SIZE + CELL_SIZE // 2
-    center_y = row * CELL_SIZE + CELL_SIZE // 2
-
-    # Define the radius for the arc
-    radius = CELL_SIZE // 4
-
-    # Calculate the bounding box for the arc
-    arc_start_x = center_x - radius
-    arc_start_y = center_y - radius
-    arc_end_x = center_x + radius
-    arc_end_y = center_y + radius
-
-    # Draw the arc (a small circular arc)
-    arc = canvas.create_arc(arc_start_x, arc_start_y, arc_end_x, arc_end_y, start=30, extent=120, style=tk.ARC, outline='#BF40BF')
-
-    # Add an arrowhead at the end of the arc
-    # Calculate the coordinates for the arrowhead
-    arrow_x = center_x + radius * np.cos(np.radians(150))
-    arrow_y = center_y - radius * np.sin(np.radians(150))
-
-    # Draw the arrowhead (as a small triangle)
-    arrowhead = canvas.create_polygon(
-        arrow_x, arrow_y + 5, 
-        arrow_x - 5, arrow_y, 
-        arrow_x + 5, arrow_y, 
-        fill='#BF40BF'
-    )
-
-    arrows[cell, 'stay'] = (arc, arrowhead)  # Store the arrow components
-
-
-def delete_stay_arrow(cell):
-    if (cell, 'stay') in arrows:
-        arc, arrowhead_line = arrows[cell, 'stay']
-        canvas.delete(arc)
-        canvas.delete(arrowhead_line)
-        del arrows[cell, 'stay']
-
 
 def select_arrow(event, arrow):
     global selected_arrow
@@ -380,19 +338,17 @@ class TransitionProbabilitiesFrame(tk.Frame):
             text="Use Standard Action Probabilities", command=self.use_standard_action_probs, state='disabled')
         self.use_standard_action_probs_button.pack()
 
-        draw_arrow_button = tk.Button(self, text="Draw Transition Arrows", command=self.draw_arrows)
+        draw_arrow_button = tk.Button(self, text="Draw Missing Transition Arrows", command=self.draw_arrows)
         draw_arrow_button.pack()
 
         self.updating = True
 
     def draw_arrows(self):
         global grid_state
-        
         for row in range(GRID_HEIGHT):
             for col in range(GRID_WIDTH):
                 if grid_state.activeGrid[row, col]:
                     action = int(action_var.get().split()[-1])
-                    # import pdb;pdb.set_trace()
                     probs = grid_state.actions[row, col, action, :]
                     # draw up arrow if state above is active
                     if row > 0 and grid_state.activeGrid[row-1, col]:
@@ -418,10 +374,6 @@ class TransitionProbabilitiesFrame(tk.Frame):
                             draw_arrow((row, col), (row, col-1))
                         else:
                             delete_arrow((row, col), (row, col-1))
-                    if probs[-1] > 0:
-                        draw_stay_arrow((row, col))
-                    else:
-                        delete_stay_arrow((row, col))
 
                     # How do we handle stay arrow?
 
