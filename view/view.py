@@ -449,8 +449,10 @@ class TransitionProbabilitiesFrame(tk.Frame):
         total_prob = sum(prob for prob in probs)
         if total_prob > 1:
             self.prob_vars[last_updated].set(f'{1-(total_prob - probs[last_updated]):.5g}')
+            probs[last_updated] = 1 - (total_prob - probs[last_updated])
         elif total_prob < 0:
             self.prob_vars[last_updated].set(str(0.0))
+            probs[last_updated] = 0.0
         stay_prob = max(0, 1 - total_prob)  # Ensure it doesn't go below 0
         self.stay_prob_var.set(f"{stay_prob:.5g}")
 
@@ -465,7 +467,6 @@ class TransitionProbabilitiesFrame(tk.Frame):
         # if sum_probs > 1:
             # raise ValueError("Sum of probabilities for North, South, East, West, and Stay must not exceed 1.")
             # we don't want to raise an error, instead we want to 
-
         save_transitions(grid_state, row, col, action, probs + [stay_prob])
 
     def get_probabilities(self):
