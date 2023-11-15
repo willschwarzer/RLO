@@ -161,6 +161,7 @@ grid = [[{'color': get_color_by_reward(0.0), 'reward': 0.0} for _ in range(GRID_
 # Variables to track the drawing and reward modes
 drawing = False
 reward_mode = False
+arrows_visible = False
 current_reward = 0.0
 
 # Modes setup
@@ -187,9 +188,6 @@ label_reward = tk.Label(root, text="Reward: 0.00")
 
 label_start_prob = tk.Label(root, text="Start Probability: 0.00")
 entry_start_prob = tk.Entry(root)
-
-start_probs = np.zeros((GRID_HEIGHT, GRID_WIDTH))
-start_weights = np.zeros((GRID_HEIGHT, GRID_WIDTH))
 
 standard_transition_probs = np.array([0.2, 0.2, 0.2, 0.2, 0.2, 0.0])
 
@@ -260,6 +258,16 @@ def draw_arrow(start, end):
     arrow = canvas.create_line(x1_pixel, y1_pixel, x2_pixel, y2_pixel, arrow=tk.LAST, fill='#BF40BF') # purple
     canvas.tag_bind(arrow, '<Button-1>', lambda event, a=arrow: select_arrow(event, a))
     arrows[(x1_pixel,y1_pixel,x2_pixel,y2_pixel)] = arrow
+
+def delete_arrows():
+    keys = list(arrows.keys())
+    for arrow_key in keys:
+        if arrow_key[1] == 'stay':
+            canvas.delete(arrows[arrow_key][0])
+            canvas.delete(arrows[arrow_key][1])
+        else:
+            canvas.delete(arrows[arrow_key])
+        del arrows[arrow_key]
 
 def delete_arrow(start, end):
     x1, y1 = start
@@ -380,50 +388,47 @@ class TransitionProbabilitiesFrame(tk.Frame):
             text="Use Standard Action Probabilities", command=self.use_standard_action_probs, state='disabled')
         self.use_standard_action_probs_button.pack()
 
-        draw_arrow_button = tk.Button(self, text="Draw Transition Arrows", command=self.draw_arrows)
+        def arrow_clicked():
+            global arrows_visible
+            arrows_visible = not arrows_visible
+            draw_arrow_button.config(text="Draw Transition Arrows" if not arrows_visible else "Hide Transition Arrows")
+            self.draw_arrows()
+
+        draw_arrow_button = tk.Button(self, text="Draw Transition Arrows", command=arrow_clicked)
         draw_arrow_button.pack()
 
         self.updating = True
 
     def draw_arrows(self):
-        global grid_state
-        
-        for row in range(GRID_HEIGHT):
-            for col in range(GRID_WIDTH):
-                if grid_state.activeGrid[row, col]:
-                    action = int(action_var.get().split()[-1])
-                    # import pdb;pdb.set_trace()
-                    probs = grid_state.actions[row, col, action, :]
-                    # draw up arrow if state above is active
-                    if row > 0 and grid_state.activeGrid[row-1, col]:
-                        if probs[0] > 0:
-                            draw_arrow((row, col), (row-1, col))
-                        else:
-                            delete_arrow((row, col), (row-1, col))
-                    # draw down arrow if state below is active
-                    if row < GRID_HEIGHT-1 and grid_state.activeGrid[row+1, col]:
-                        if probs[1] > 0:
-                            draw_arrow((row, col), (row+1, col))
-                        else:
-                            delete_arrow((row, col), (row+1, col))
-                    # draw right arrow if state to the right is active
-                    if col < GRID_WIDTH-1 and grid_state.activeGrid[row, col+1]:
-                        if probs[2] > 0:
-                            draw_arrow((row, col), (row, col+1))
-                        else:
-                            delete_arrow((row, col), (row, col+1))
-                    # draw left arrow if state to the left is active
-                    if col > 0 and grid_state.activeGrid[row, col-1]:
-                        if probs[3] > 0:
-                            draw_arrow((row, col), (row, col-1))
-                        else:
-                            delete_arrow((row, col), (row, col-1))
-                    if probs[-1] > 0:
-                        draw_stay_arrow((row, col))
-                    else:
-                        delete_stay_arrow((row, col))
+        global grid_state, arrows_visible
+        delete_arrows()
+        if arrows_visible:
+            action = int(action_var.get().split()[-1])
+            for row in range(GRID_HEIGHT):
+                for col in range(GRID_WIDTH):
+                    if grid_state.isActive(row, col):
+                        # import pdb;pdb.set_trace()
+                        probs = grid_state.actions[row, col, action, :]
+                        # draw up arrow if state above is active
+                        if row > 0 and grid_state.isActive(row-1, col):
+                            if probs[0] > 0:
+                                draw_arrow((row, col), (row-1, col))
+                        # draw down arrow if state below is active
+                        if row < GRID_HEIGHT-1 and grid_state.isActive(row+1, col):
+                            if probs[1] > 0:
+                                draw_arrow((row, col), (row+1, col))
+                        # draw right arrow if state to the right is active
+                        if col < GRID_WIDTH-1 and grid_state.isActive(row, col+1):
+                            if probs[2] > 0:
+                                draw_arrow((row, col), (row, col+1))
+                        # draw left arrow if state to the left is active
+                        if col > 0 and grid_state.isActive(row, col-1):
+                            if probs[3] > 0:
+                                draw_arrow((row, col), (row, col-1))
+                        if probs[-1] > 0:
+                            draw_stay_arrow((row, col))
 
-                    # How do we handle stay arrow?
+                        # How do we handle stay arrow?
 
 
     def use_standard_action_probs(self):
@@ -432,13 +437,22 @@ class TransitionProbabilitiesFrame(tk.Frame):
             return
         row, col = selected_cell
         action = int(action_var.get().split()[-1])
-        save_transitions(grid_state, row, col, action, standard_transition_probs)
+        for ind, prob in enumerate(standard_transition_probs[:-1]):
+            self.prob_vars[ind].set(str(prob))
+        self.stay_prob_var.set(str(standard_transition_probs[-1]))
         self.load_probabilities()
     
 
     def update_probs(self, name, *args):
         if not self.updating:
             return
+
+        global selected_cell, action_var
+        if selected_cell is None or action_var.get() is None:
+            return
+        row, col = selected_cell
+        action = int(action_var.get().split()[-1])
+
         last_updated = int(name)
         probs = []
         for prob_var in self.prob_vars:
@@ -446,7 +460,23 @@ class TransitionProbabilitiesFrame(tk.Frame):
                 probs.append(float(prob_var.get()))
             except:
                 probs.append(0.0)
+
+        #Make sure probability to invalid state is 0
+        if not grid_state.isActive(row-1, col) and last_updated == 0 and probs[0] != 0:
+            self.prob_vars[0].set(str(0.0))
+            probs[0] = 0.0
+        if not grid_state.isActive(row+1, col) and last_updated == 1 and probs[1] != 0:
+            self.prob_vars[1].set(str(0.0))
+            probs[1] = 0.0
+        if not grid_state.isActive(row, col+1) and last_updated == 2 and probs[2] != 0:
+            self.prob_vars[2].set(str(0.0))
+            probs[2] = 0.0
+        if not grid_state.isActive(row, col-1) and last_updated == 3 and probs[3] != 0:
+            self.prob_vars[3].set(str(0.0))
+            probs[3] = 0.0
+
         total_prob = sum(prob for prob in probs)
+        
         if total_prob > 1:
             self.prob_vars[last_updated].set(f'{1-(total_prob - probs[last_updated]):.5g}')
             probs[last_updated] = 1 - (total_prob - probs[last_updated])
@@ -456,18 +486,13 @@ class TransitionProbabilitiesFrame(tk.Frame):
         stay_prob = max(0, 1 - total_prob)  # Ensure it doesn't go below 0
         self.stay_prob_var.set(f"{stay_prob:.5g}")
 
-        # modify the numpy array
-        global selected_cell, action_var
-        if selected_cell is None or action_var.get() is None:
-            return
-        row, col = selected_cell
-        action = int(action_var.get().split()[-1])
-
         # sum_probs = sum(prob_values)
         # if sum_probs > 1:
             # raise ValueError("Sum of probabilities for North, South, East, West, and Stay must not exceed 1.")
             # we don't want to raise an error, instead we want to 
         save_transitions(grid_state, row, col, action, probs + [stay_prob])
+        if arrows_visible:
+            self.draw_arrows()
 
     def get_probabilities(self):
         # Method to retrieve the probability values
@@ -485,7 +510,6 @@ class TransitionProbabilitiesFrame(tk.Frame):
         # Assuming you have a method in your model to get probabilities
         # Replace this with your actual method to retrieve probabilities
         probs = grid_state.actions[row, col, action, :]
-        print(probs)
 
         # Update the probability variables with the retrieved values
         for i in range(5):  # For North, South, East, West, Terminate
@@ -497,8 +521,27 @@ class TransitionProbabilitiesFrame(tk.Frame):
         self.updating = True
 
     def enable_entries(self):
-        for entry in self.entries:
-            entry.config(state='normal')
+        global selected_cell
+        if selected_cell is None:
+            self.disable_entries()
+            return
+        row, col = selected_cell
+        if not grid_state.isActive(row-1, col):
+            self.entries[0].config(state='readonly')
+        else:
+            self.entries[0].config(state='normal')
+        if not grid_state.isActive(row+1, col):
+            self.entries[1].config(state='readonly')
+        else:
+            self.entries[1].config(state='normal')
+        if not grid_state.isActive(row, col+1):
+            self.entries[2].config(state='readonly')
+        else:
+            self.entries[2].config(state='normal')
+        if not grid_state.isActive(row, col-1):
+            self.entries[3].config(state='readonly')
+        else:
+            self.entries[3].config(state='normal')
         self.stay_entry.config(state='readonly')  # Stay entry should remain read-only
         self.use_standard_action_probs_button.config(state='normal')
 
@@ -520,13 +563,17 @@ def cell_click(event, row, col):
 
     if mode == "Select Mode":
         grid_state.setActiveGridCoord(row, col, not eraser_active)
-        if not grid_state.activeGrid[row, col]: # if no longer active, set reward to 0
+        if not grid_state.isActive(row, col): # if no longer active, set reward to 0
             grid_state.setReward(row, col, 0.0)
-        grid[row][col]['color'] = 'white' if grid_state.activeGrid[row, col] else 'black'
+            grid_state.setStartingProb(row, col, 0.0)
+        grid[row][col]['color'] = 'white' if grid_state.isActive(row, col) else 'black'
         update_grid()
     elif mode.lower() in ["start prob mode", "reward mode", "transition mode"]:
         # Unhighlight the previously selected cell
         selected_cell = (row, col)
+        # Exit if cell is inactive
+        if not grid_state.isActive(row, col):
+            return
         if highlighted_cell is not None:
             prev_row, prev_col = highlighted_cell
             canvas.itemconfig(cells[prev_row][prev_col], width=1)  # Unhighlight the previous cell
@@ -540,7 +587,7 @@ def cell_click(event, row, col):
         # For 'start prob mode', update the start probability label
         if mode.lower() == "start prob mode":
             if selected_cell:
-                label_start_prob.config(text=f"Start Probability: {start_probs[row, col]:.2f}")
+                label_start_prob.config(text=f"Start Probability: {grid_state.startingProbs[row, col]:.2f}")
             else:
                 label_start_prob.config(text="Start Probability: 0.00")
         # For 'reward mode', update the reward label
@@ -550,7 +597,7 @@ def cell_click(event, row, col):
             else:
                 label_reward.config(text="Reward: 0.00")
         elif mode.lower() == "transition mode":
-            if selected_cell and grid_state.activeGrid[row, col]:
+            if selected_cell and grid_state.isActive(row, col):
                 trans_prob_frame.enable_entries()
                 trans_prob_frame.load_probabilities()
             else:
@@ -558,7 +605,7 @@ def cell_click(event, row, col):
     # elif mode.lower() == "transition mode":
     #     # global arrow_start_coord
     #     # # Check if there is an arrow at the specified row and col
-    #     # if arrow_start_coord is None and grid_state.activeGrid[row, col] and not eraser_active:
+    #     # if arrow_start_coord is None and grid_state.isActive(row, col] and not eraser_active:
     #     #     # Unhighlight the previously selected cell
     #     #     selected_cell = (row, col)
     #     #     if highlighted_cell:
@@ -568,7 +615,7 @@ def cell_click(event, row, col):
     #     #     # Highlight the newly selected cell
     #     #     canvas.itemconfig(cells[row][col], width=3)
     #     #     arrow_start_coord = (row, col)
-    #     # elif arrow_start_coord is not None and grid_state.activeGrid[row, col] and (row, col) != arrow_start_coord and not eraser_active:
+    #     # elif arrow_start_coord is not None and grid_state.isActive(row, col] and (row, col) != arrow_start_coord and not eraser_active:
     #     #     # Remove highlighted cell
     #     #     if highlighted_cell:
     #     #         canvas.itemconfig(cells[highlighted_cell[0]][highlighted_cell[1]], width=1)
@@ -576,7 +623,7 @@ def cell_click(event, row, col):
     #     #         selected_cell = None
     #     #     draw_arrow(arrow_start_coord, (row, col))
     #     #     arrow_start_coord = None
-    #     # elif arrow_start_coord is not None and grid_state.activeGrid[row, col] and (row, col) == arrow_start_coord:
+    #     # elif arrow_start_coord is not None and grid_state.isActive(row, col] and (row, col) == arrow_start_coord:
     #     #     # Remove highlighted cell
     #     #     if highlighted_cell:
     #     #         canvas.itemconfig(cells[highlighted_cell[0]][highlighted_cell[1]], width=1)
@@ -658,7 +705,7 @@ def set_start_prob(event):
     mode = modes[mode_var.get()]
     if mode.lower() == "start prob mode" and selected_cell:
         row, col = selected_cell
-        if not grid_state.activeGrid[row, col]:
+        if not grid_state.isActive(row, col):
             return
         try:
             update_status("")
@@ -666,7 +713,7 @@ def set_start_prob(event):
             if not 0 <= prob <= 1:
                 update_status("Probability must be between 0 and 1")
                 return
-            start_probs[row, col] = prob
+            grid_state.setStartingProb(row, col, prob)
             # normalize_start_probs()
             # not normalizing for now
             check_start_probs(normalize=False)
@@ -680,9 +727,9 @@ def set_start_prob(event):
             update_status("Invalid input")
 
 def check_start_probs(normalize=False):
-    prob_sum = np.sum(start_probs)
+    prob_sum = np.sum(grid_state.startingProbs)
     if prob_sum > 0 and normalize:
-        np.divide(start_probs, prob_sum, out=start_probs)
+        np.divide(grid_state.startingProbs, prob_sum, out=grid_state.startingProbs)
         return
     if prob_sum > 1:
         update_status(f"Sum of start probabilities: {prob_sum:.2f}", color="orange")
@@ -702,8 +749,9 @@ def draw(event):
         current_cell = (row, col)
         if mode == "Select Mode" and current_cell != last_toggled_cell:
             grid_state.setActiveGridCoord(row, col, not eraser_active)
-            if not grid_state.activeGrid[row, col]: # if no longer active, set reward to 0
+            if not grid_state.isActive(row, col): # if no longer active, set reward to 0
                 grid_state.setReward(row, col, 0.0)
+                grid_state.setStartingProb(row, col, 0.0)
             last_toggled_cell = current_cell
             update_grid()
                 
@@ -713,7 +761,7 @@ def set_reward(event):
     mode = modes[mode_var.get()]
     if mode.lower() == "reward mode" and selected_cell:
         row, col = selected_cell
-        if not grid_state.activeGrid[row, col]:
+        if not grid_state.isActive(row, col):
             return
         try:
             reward = float(entry_reward.get())
@@ -775,10 +823,10 @@ def update_grid():
     mode = modes[mode_var.get()]
     for row in range(GRID_HEIGHT):
         for col in range(GRID_WIDTH):
-            if grid_state.activeGrid[row, col]:
+            if grid_state.isActive(row, col):
                 if mode == "Start Prob Mode":
                     # Normalize the start probability to [0, 1] for color saturation
-                    saturation = start_probs[row, col] / max(start_probs.max(), 1)
+                    saturation = grid_state.startingProbs[row, col] / max(grid_state.startingProbs.max(), 1)
                     cell_color = get_saturated_color("blue", saturation)
                 else:
                     cell_color = get_color_by_reward(grid_state.rewards[row, col])
@@ -808,7 +856,7 @@ def update_ui():
         # entry_reward.pack_forget()
         # eraser_button.pack_forget()
         # check if start probs sum to 1
-        value = start_probs[selected_cell[0], selected_cell[1]] if selected_cell is not None else 0.0
+        value = grid_state.startingProbs[selected_cell[0], selected_cell[1]] if selected_cell is not None else 0.0
         label_start_prob.config(text=f"Start Probability: {value:.2f}")
         entry_start_prob.delete(0, tk.END)
         check_start_probs(normalize=False)
@@ -842,12 +890,14 @@ def update_ui():
 
         # pack_things_in_order(show_mode_label=True, show_eraser=True, show_clear=True, show_action_menu=True)
         pack_things_in_order(show_action_menu=True, show_transition_table=True)
+        trans_prob_frame.enable_entries()
+        trans_prob_frame.load_probabilities()
 
 def clear():
     if messagebox.askokcancel("Confirmation", "Are you sure you want to clear?"):
         mode = modes[mode_var.get()]
         if mode.lower() == "start prob mode":
-            start_probs.fill(0.0)
+            grid_state.startingProbs.fill(0.0)
             check_start_probs(normalize=False)
         elif mode.lower() == "reward mode":
             grid_state.rewards.fill(0.0)

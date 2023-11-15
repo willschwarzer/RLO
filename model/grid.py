@@ -4,17 +4,22 @@ class Grid:
     def __init__(self, rows, cols, numActions):
         self.rows = rows
         self.cols = cols
-        self.activeGrid = np.zeros((rows, cols), dtype=bool)
+        self._activeGrid = np.zeros((rows, cols), dtype=bool)
         self.rewards = np.zeros((rows, cols), dtype=float)
         self.actions = np.zeros((rows, cols, numActions, 6), dtype=float)
         self.startingProbs = np.zeros((rows, cols), dtype=float)
 
+    def isActive(self, row, col):
+        if row < 0 or row >= self.rows or col < 0 or col >= self.cols:
+            return False
+        return self._activeGrid[row, col]
+
     def setActiveGridCoord(self, row, col, active):
-        self.activeGrid[row, col] = active
+        self._activeGrid[row, col] = active
 
     def setActiveGrid(self, coordList):
         for coord in coordList:
-            self.activeGrid[coord[0], coord[1]] = not self.activeGrid[coord[0], coord[1]]
+            self._activeGrid[coord[0], coord[1]] = not self._activeGrid[coord[0], coord[1]]
 
     def setStartingProb(self, row, col, prob):
         self.startingProbs[row, col] = prob
