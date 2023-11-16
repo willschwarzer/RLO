@@ -1,0 +1,5 @@
+model/__pycache__/*
+# all .egg-info directories
+**/*.egg-info/*
+**/PKG-INFO
+RLO_RL.egg-info/PKG-INFO
