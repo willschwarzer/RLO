@@ -189,7 +189,7 @@ label_reward = tk.Label(root, text="Reward: 0.00")
 label_start_prob = tk.Label(root, text="Start Probability: 0.00")
 entry_start_prob = tk.Entry(root)
 
-standard_transition_probs = np.array([0.2, 0.2, 0.2, 0.2, 0.2, 0.0])
+standard_transition_probs = np.array([0.8, 0.0, 0.05, 0.05, 0.0, 0.1])
 
 # Entry for setting rewards (only in reward mode)
 entry_reward = tk.Entry(root)
@@ -205,38 +205,55 @@ def open_standard_actions_settings():
 
     # Variables for action probabilities
     move_up_var = tk.DoubleVar(value=standard_transition_probs[0])
-    move_right_var = tk.DoubleVar(value=standard_transition_probs[1])  # Default values can be adjusted
+    move_right_var = tk.DoubleVar(value=standard_transition_probs[1])
     move_left_var = tk.DoubleVar(value=standard_transition_probs[2])
     move_down_var = tk.DoubleVar(value=standard_transition_probs[3])
-    stay_still_var = tk.DoubleVar(value=standard_transition_probs[4])
-    terminate_var = tk.DoubleVar(value=standard_transition_probs[5])
+    terminate_var = tk.DoubleVar(value=standard_transition_probs[4])
+    stay_still_var = tk.DoubleVar(value=standard_transition_probs[5])
+
+    prob_vars = [move_up_var, move_right_var, move_left_var, move_down_var, terminate_var, stay_still_var]
+
+    # Function to update probabilities dynamically
+    def update_probs(name, *args):
+        # Handle negative probabilities
+        for var in prob_vars[:-1]:
+            if var.get() < 0:
+                var.set(0)
+
+        total_move_prob = sum(var.get() for var in prob_vars[:-1])
+        if total_move_prob > 1:
+            # Find the variable that was just updated and adjust it
+            updated_var = next((var for var in prob_vars[:-1] if var._name == name), None)
+            if updated_var:
+                updated_var.set(updated_var.get() - (total_move_prob - 1))
+            total_move_prob = 1  # Recalculate total move probability
+
+        # Format stay probability to display up to 5 significant digits
+        stay_still_var.set(f"{1 - total_move_prob:.5g}")
+
+    # Attach update function to each move probability variable
+    for var in prob_vars[:-1]:  # Exclude stay_still_var as it is calculated
+        var.trace('w', update_probs)
 
     # Create and layout labels and entries for probabilities
-    tk.Label(action_window, text="Move Up Probability").grid(row=0, column=0)
-    tk.Entry(action_window, textvariable=move_up_var).grid(row=0, column=1)
+    directions = ["Move Forward", "Slip Backward", "Slip Left", "Slip Right", "Terminate", "Stay Still"]
+    for i, (direction, var) in enumerate(zip(directions, prob_vars)):
+        tk.Label(action_window, text=direction).grid(row=i, column=0)
+        entry = tk.Entry(action_window, textvariable=var)
+        entry.grid(row=i, column=1)
+        if direction == "Stay Still":
+            entry.config(state='readonly')  # Disable editing for Stay Still probability
 
-    tk.Label(action_window, text="Move Backwards Probability").grid(row=1, column=0)
-    tk.Entry(action_window, textvariable=move_down_var).grid(row=1, column=1)
+    def apply_to_all_states():
+        if messagebox.askokcancel("Confirmation", "Apply these settings to all states?"):
+            save_standard_actions(*prob_vars)
 
-    tk.Label(action_window, text="Move Left Probability").grid(row=2, column=0)
-    tk.Entry(action_window, textvariable=move_left_var).grid(row=2, column=1)
+    # Save and Close buttons
+    save_button = tk.Button(action_window, text="Apply to all states", command=apply_to_all_states)
+    save_button.grid(row=len(directions), columnspan=2)
+    tk.Button(action_window, text="Close", command=action_window.destroy).grid(row=len(directions) + 1, columnspan=2)
 
-    tk.Label(action_window, text="Move Right Probability").grid(row=3, column=0)
-    tk.Entry(action_window, textvariable=move_right_var).grid(row=3, column=1)
 
-    tk.Label(action_window, text="Stay Still Probability").grid(row=4, column=0)
-    tk.Entry(action_window, textvariable=stay_still_var).grid(row=4, column=1)
-
-    tk.Label(action_window, text="Terminate Probability").grid(row=5, column=0)
-    tk.Entry(action_window, textvariable=terminate_var).grid(row=5, column=1)
-
-    # Save button
-    tk.Button(action_window, text="Save", command=lambda: save_standard_actions(
-        move_up_var, move_down_var, move_left_var, move_right_var, stay_still_var, terminate_var
-    )).grid(row=6, columnspan=2)
-
-    # Close button
-    tk.Button(action_window, text="Close", command=action_window.destroy).grid(row=7, columnspan=2)
 
 # Create Arrows list to hold every arrow drawn
 arrows = {}
@@ -379,7 +396,7 @@ class TransitionProbabilitiesFrame(tk.Frame):
         for prob_var in self.prob_vars:
             prob_var.trace("w", self.update_probs)
 
-        standard_actions_button = tk.Button(self, text="Set Standard Action Probabilities", command=open_standard_actions_settings)
+        standard_actions_button = tk.Button(self, text="Use Slippery Gridworld Transitions", command=open_standard_actions_settings)
         standard_actions_button.grid(row=3, columnspan=4)  # Adjust row and columnspan according to your layout
 
         self.use_standard_action_probs_button = tk.Button(self, 
@@ -640,7 +657,7 @@ def save_transitions(grid, row, col, action_index, prob_values):
     - row: int, the row index of the cell
     - col: int, the column index of the cell
     - action_index: int, the index of the action
-    - prob_values: list of float, the probabilities for [North, South, East, West, Stay, Terminate]
+    - prob_values: list of float, the probabilities for [North, South, East, West, Terminate, Stay]
     """
     # Ensure the sum of the first five probabilities (excluding the terminate probability) is <= 1
 
@@ -649,26 +666,75 @@ def save_transitions(grid, row, col, action_index, prob_values):
 
 def save_standard_actions(move_up_var, move_down_var, move_left_var, move_right_var, stay_still_var, terminate_var):
     total_prob = 0
-    up_prob = move_up_var.get()
-    down_prob = move_down_var.get()
-    left_prob = move_left_var.get()
-    right_prob = move_right_var.get()
+    forward_prob = move_up_var.get()
+    backward_prob = move_down_var.get()
+    slip_left_prob = move_left_var.get()
+    slip_right_prob = move_right_var.get()
     stay_prob = stay_still_var.get()
     terminate_prob = terminate_var.get()
-    total_prob = up_prob + down_prob + left_prob + right_prob + stay_prob + terminate_prob
+    standard_transition_probs[0] = forward_prob
+    standard_transition_probs[1] = backward_prob
+    standard_transition_probs[2] = slip_left_prob
+    standard_transition_probs[3] = slip_right_prob
+    standard_transition_probs[4] = stay_prob
+    standard_transition_probs[5] = terminate_prob
+    for action_index in range(4):  # Assuming 4 actions
+        apply_standard_probabilities_to_action(action_index, standard_transition_probs)
+    # total_prob = up_prob + down_prob + left_prob + right_prob + stay_prob + terminate_prob
     # so we don't need to check that sum is > 1
-    normalized_prob = [up_prob / total_prob,
-                       down_prob / total_prob,
-                       left_prob / total_prob,
-                       right_prob / total_prob,
-                       stay_prob / total_prob,
-                       terminate_prob / total_prob]
-    standard_transition_probs[0] = normalized_prob[0]
-    standard_transition_probs[1] = normalized_prob[1]
-    standard_transition_probs[2] = normalized_prob[2]
-    standard_transition_probs[3] = normalized_prob[3]
-    standard_transition_probs[4] = normalized_prob[4]
-    standard_transition_probs[5] = normalized_prob[5]
+    # normalized_prob = [up_prob / total_prob,
+    #                    down_prob / total_prob,
+    #                    left_prob / total_prob,
+    #                    right_prob / total_prob,
+    #                    stay_prob / total_prob,
+    #                    terminate_prob / total_prob]
+    # standard_transition_probs[0] = normalized_prob[0]
+    # standard_transition_probs[1] = normalized_prob[1]
+    # standard_transition_probs[2] = normalized_prob[2]
+    # standard_transition_probs[3] = normalized_prob[3]
+    # standard_transition_probs[4] = normalized_prob[4]
+    # standard_transition_probs[5] = normalized_prob[5]
+    # convert this into concrete probs for action 0, going right
+
+def apply_standard_probabilities_to_action(action_index, standard_transition_probs):
+    for row in range(GRID_HEIGHT):
+        for col in range(GRID_WIDTH):
+            if grid_state.isActive(row, col):
+                # Initialize probabilities
+                probs = [0.0, 0.0, 0.0, 0.0, standard_transition_probs[4], standard_transition_probs[5]]
+                # [North, South, East, West, Stay, Terminate]
+                # on the other hand, standard_transition_probs is [Forward, Backward, Left, Right, Stay, Terminate]
+
+                # Check and set probabilities based on the active state of neighboring cells
+                if action_index == 0:  # Attempt to go east
+                    probs[2] = standard_transition_probs[0] if col < GRID_WIDTH-1 and grid_state.isActive(row, col+1) else 0 # East (successfully moved forward)
+                    probs[1] = standard_transition_probs[3] if row < GRID_HEIGHT-1 and grid_state.isActive(row+1, col) else 0 # South (slipped right)
+                    probs[3] = standard_transition_probs[1] if col > 0 and grid_state.isActive(row, col-1) else 0 # West (slipped backward)
+                    probs[0] = standard_transition_probs[2] if row > 0 and grid_state.isActive(row-1, col) else 0 # North (slipped left)
+                # ... [similar logic for actions 1, 2, and 3]
+                if action_index == 1: # Attempt to go south
+                    probs[1] = standard_transition_probs[0] if row < GRID_HEIGHT-1 and grid_state.isActive(row+1, col) else 0 # South (successfully moved forward)
+                    probs[3] = standard_transition_probs[3] if col > 0 and grid_state.isActive(row, col-1) else 0 # West (slipped right)
+                    probs[0] = standard_transition_probs[1] if row > 0 and grid_state.isActive(row-1, col) else 0 # North (slipped backward)
+                    probs[2] = standard_transition_probs[2] if col < GRID_WIDTH-1 and grid_state.isActive(row, col+1) else 0 # East (slipped left)
+                if action_index == 2: # Attempt to go west
+                    probs[3] = standard_transition_probs[0] if col > 0 and grid_state.isActive(row, col-1) else 0 # West (successfully moved forward)
+                    probs[0] = standard_transition_probs[3] if row > 0 and grid_state.isActive(row-1, col) else 0 # North (slipped right)
+                    probs[2] = standard_transition_probs[1] if col < GRID_WIDTH-1 and grid_state.isActive(row, col+1) else 0 # East (slipped backward)
+                    probs[1] = standard_transition_probs[2] if row < GRID_HEIGHT-1 and grid_state.isActive(row+1, col) else 0 # South (slipped left)
+                if action_index == 3: # Attempt to go north
+                    probs[0] = standard_transition_probs[0] if row > 0 and grid_state.isActive(row-1, col) else 0 # North (successfully moved forward)
+                    probs[2] = standard_transition_probs[3] if col > 0 and grid_state.isActive(row, col-1) else 0 # East (slipped right)
+                    probs[1] = standard_transition_probs[1] if row < GRID_HEIGHT-1 and grid_state.isActive(row+1, col) else 0 # South (slipped backward)
+                    probs[3] = standard_transition_probs[2] if col < GRID_WIDTH-1 and grid_state.isActive(row, col+1) else 0 # West (slipped left)
+
+                # Calculate the total move probability and adjust the stay probability
+                total_move_prob = sum(probs[:5])  # Sum of the first four probabilities (excluding stay and terminate)
+                remaining_prob = 1 - total_move_prob # Remaining probability for stay
+                probs[5] = remaining_prob
+
+                # Save the adjusted probabilities for the action
+                grid_state.addActionList((row, col), action_index, probs)
 
 #TODO delete
 def show_transition_table_old(row, col, action):
