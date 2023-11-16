@@ -358,35 +358,33 @@ class TransitionProbabilitiesFrame(tk.Frame):
         tk.Frame.__init__(self, parent, *args, **kwargs)
 
         # Variables for probabilities
-        # self.prob_vars = [tk.DoubleVar(value=0.0) for _ in range(5)]  # For North, South, East, West, Terminate
-        # have it be a string var instead to avoid errors
-        self.prob_vars = [tk.StringVar(name=str(_), value="0.0") for _ in range(5)] # For North, South, East, West, Terminate
+        self.prob_vars = [tk.StringVar(name=str(_), value="0.0") for _ in range(5)]  # For North, South, East, West, Terminate
         self.stay_prob_var = tk.StringVar(value="1.0")  # Stay probability
 
-        # Create and pack the direction labels and entries
+        # Create and pack the direction labels and entries in a grid layout
         self.entries = []
-
-        for i, direction in enumerate(["North", "South", "East", "West", "Terminate"]):
-            tk.Label(self, text=direction).pack()
-            entry = tk.Entry(self, textvariable=self.prob_vars[i], state='disabled')  # Initially disabled
-            entry.pack()
+        directions = ["North", "South", "East", "West", "Terminate"]
+        for i, direction in enumerate(directions):
+            tk.Label(self, text=direction).grid(row=i//2, column=i%2*2, sticky=tk.W)
+            entry = tk.Entry(self, textvariable=self.prob_vars[i], state='disabled')
+            entry.grid(row=i//2, column=i%2*2+1)
             self.entries.append(entry)
 
         # Stay probability entry (read-only and initially disabled)
-        tk.Label(self, text="Stay").pack()
+        tk.Label(self, text="Stay").grid(row=len(directions)//2, column=2, sticky=tk.W)
         self.stay_entry = tk.Entry(self, textvariable=self.stay_prob_var, state='readonly', disabledbackground='light grey')
-        self.stay_entry.pack()
+        self.stay_entry.grid(row=len(directions)//2, column=3)
 
         # Attach the update function to the probability variables
         for prob_var in self.prob_vars:
             prob_var.trace("w", self.update_probs)
 
         standard_actions_button = tk.Button(self, text="Set Standard Action Probabilities", command=open_standard_actions_settings)
-        standard_actions_button.pack()
+        standard_actions_button.grid(row=3, columnspan=4)  # Adjust row and columnspan according to your layout
 
         self.use_standard_action_probs_button = tk.Button(self, 
             text="Use Standard Action Probabilities", command=self.use_standard_action_probs, state='disabled')
-        self.use_standard_action_probs_button.pack()
+        self.use_standard_action_probs_button.grid(row=4, columnspan=4)
 
         def arrow_clicked():
             global arrows_visible
@@ -395,7 +393,7 @@ class TransitionProbabilitiesFrame(tk.Frame):
             self.draw_arrows()
 
         draw_arrow_button = tk.Button(self, text="Draw Transition Arrows", command=arrow_clicked)
-        draw_arrow_button.pack()
+        draw_arrow_button.grid(row=5, columnspan=4)
 
         self.updating = True
 
