@@ -11,7 +11,7 @@ CELL_SIZE = 40
 
 # Create the main window
 root = tk.Tk()
-root.title("Gridworld Game")
+root.title("Gridworld Generator")
 
 # Create a canvas for the grid
 canvas = tk.Canvas(root, width=GRID_WIDTH * CELL_SIZE, height=GRID_HEIGHT * CELL_SIZE)
@@ -29,7 +29,7 @@ def pack_things_in_order(show_reward=False,
                          show_clear=False, 
                          show_action_menu=False,
                          show_transition_table=False,
-                         show_standard_actions=False):
+                         show_solve_stuff=False):
     for r in radio_buttons:
         r.pack(anchor='w')
     canvas.pack()
@@ -45,6 +45,8 @@ def pack_things_in_order(show_reward=False,
     status_label.pack_forget()
     action_menu.pack_forget()
     trans_prob_frame.pack_forget()
+    solve_button.pack_forget()
+    solver_menu.pack_forget()
 
     
     if show_action_menu:
@@ -65,6 +67,9 @@ def pack_things_in_order(show_reward=False,
         clear_button.pack()
     if show_transition_table:
         trans_prob_frame.pack()
+    if show_solve_stuff:
+        solver_menu.pack()
+        solve_button.pack()
 
 # Determine the color based on reward value
 def get_color_by_reward(reward):
@@ -159,14 +164,12 @@ def get_saturated_color(base_color, saturation):
 grid = [[{'color': get_color_by_reward(0.0), 'reward': 0.0} for _ in range(GRID_WIDTH)] for _ in range(GRID_HEIGHT)]
 
 # Variables to track the drawing and reward modes
-drawing = False
-reward_mode = False
 arrows_visible = False
 current_reward = 0.0
 
 # Modes setup
-modes = ["Select Mode", "Transition Mode", "Reward Mode", "Start Prob Mode"]
-mode_text = ["Add/remove states", "Specify transition probabilities", "Specify rewards", "Specify start probabilities"]
+modes = ["Select Mode", "Transition Mode", "Reward Mode", "Start Prob Mode", "Solve Mode"]
+mode_text = ["Add/remove states", "Specify transition probabilities", "Specify rewards", "Specify start probabilities", "Solve!"]
 
 eraser_active = False
 # eraser_active.set(False)  # Default to not erasing
@@ -245,8 +248,10 @@ def open_standard_actions_settings():
             entry.config(state='readonly')  # Disable editing for Stay Still probability
 
     def apply_to_all_states():
-        if messagebox.askokcancel("Confirmation", "Apply these settings to all states?"):
+        if messagebox.askokcancel("Confirmation", "Create four actions with these transitions for all states?"):
             save_standard_actions(*prob_vars)
+            update_ui()
+            action_window.destroy()
 
     # Save and Close buttons
     save_button = tk.Button(action_window, text="Apply to all states", command=apply_to_all_states)
@@ -271,6 +276,14 @@ def draw_arrow(start, end):
     y1_pixel = x1 * CELL_SIZE + CELL_SIZE // 2
     x2_pixel = y2 * CELL_SIZE + CELL_SIZE // 2
     y2_pixel = x2 * CELL_SIZE + CELL_SIZE // 2
+
+    # Also make it just draw to the line between the two cells
+    # Either the two x values are the same or the two y values are the same
+    # so we get the value that's the same and then set the other second pixel to be half way between the two
+    if x1_pixel == x2_pixel:
+        y2_pixel = y1_pixel + (y2_pixel - y1_pixel) // 2
+    else:
+        x2_pixel = x1_pixel + (x2_pixel - x1_pixel) // 2
     # Draw the arrow
     arrow = canvas.create_line(x1_pixel, y1_pixel, x2_pixel, y2_pixel, arrow=tk.LAST, fill='#BF40BF') # purple
     canvas.tag_bind(arrow, '<Button-1>', lambda event, a=arrow: select_arrow(event, a))
@@ -307,8 +320,8 @@ def draw_stay_arrow(cell):
     center_x = col * CELL_SIZE + CELL_SIZE // 2
     center_y = row * CELL_SIZE + CELL_SIZE // 2
 
-    # Define the radius for the arc
-    radius = CELL_SIZE // 4
+    # Define the radius for the arc (making it smaller)
+    radius = CELL_SIZE // 6  # Reduced radius for a smaller arrow
 
     # Calculate the bounding box for the arc
     arc_start_x = center_x - radius
@@ -316,19 +329,20 @@ def draw_stay_arrow(cell):
     arc_end_x = center_x + radius
     arc_end_y = center_y + radius
 
-    # Draw the arc (a small circular arc)
-    arc = canvas.create_arc(arc_start_x, arc_start_y, arc_end_x, arc_end_y, start=30, extent=120, style=tk.ARC, outline='#BF40BF')
+    # Draw the arc (a larger circular arc for a more complete circle)
+    arc = canvas.create_arc(arc_start_x, arc_start_y, arc_end_x, arc_end_y, start=30, extent=300, style=tk.ARC, outline='#BF40BF')  # Increased extent for a fuller circle
 
     # Add an arrowhead at the end of the arc
     # Calculate the coordinates for the arrowhead
-    arrow_x = center_x + radius * np.cos(np.radians(150))
-    arrow_y = center_y - radius * np.sin(np.radians(150))
+    arrow_angle = 30 + 300  # Adjust the angle to match the end of the arc
+    arrow_x = center_x + radius * np.cos(np.radians(arrow_angle))
+    arrow_y = center_y - radius * np.sin(np.radians(arrow_angle))
 
     # Draw the arrowhead (as a small triangle)
     arrowhead = canvas.create_polygon(
-        arrow_x, arrow_y + 5, 
-        arrow_x - 5, arrow_y, 
-        arrow_x + 5, arrow_y, 
+        arrow_x, arrow_y + 3,  # Adjusted for the smaller arrow
+        arrow_x - 3, arrow_y, 
+        arrow_x + 3, arrow_y, 
         fill='#BF40BF'
     )
 
@@ -534,6 +548,7 @@ class TransitionProbabilitiesFrame(tk.Frame):
         # self.stay_prob_var.set(str(probs[5]))
         self.stay_prob_var.set(f"{probs[5]:.5g}")
         self.updating = True
+        self.draw_arrows() # XXX why the fresh heck am I doing this here?
 
     def enable_entries(self):
         global selected_cell
@@ -724,9 +739,9 @@ def apply_standard_probabilities_to_action(action_index, standard_transition_pro
                     probs[1] = standard_transition_probs[2] if row < GRID_HEIGHT-1 and grid_state.isActive(row+1, col) else 0 # South (slipped left)
                 if action_index == 3: # Attempt to go north
                     probs[0] = standard_transition_probs[0] if row > 0 and grid_state.isActive(row-1, col) else 0 # North (successfully moved forward)
-                    probs[2] = standard_transition_probs[3] if col > 0 and grid_state.isActive(row, col-1) else 0 # East (slipped right)
+                    probs[2] = standard_transition_probs[3] if col < GRID_WIDTH-1 and grid_state.isActive(row, col+1) else 0 # East (slipped right)
                     probs[1] = standard_transition_probs[1] if row < GRID_HEIGHT-1 and grid_state.isActive(row+1, col) else 0 # South (slipped backward)
-                    probs[3] = standard_transition_probs[2] if col < GRID_WIDTH-1 and grid_state.isActive(row, col+1) else 0 # West (slipped left)
+                    probs[3] = standard_transition_probs[2] if col > 0 and grid_state.isActive(row, col-1) else 0 # West (slipped left)
 
                 # Calculate the total move probability and adjust the stay probability
                 total_move_prob = sum(probs[:5])  # Sum of the first four probabilities (excluding stay and terminate)
@@ -956,6 +971,10 @@ def update_ui():
         pack_things_in_order(show_action_menu=True, show_transition_table=True)
         trans_prob_frame.enable_entries()
         trans_prob_frame.load_probabilities()
+    elif mode.lower() == "solve mode":
+        pack_things_in_order(show_solve_stuff=True)
+    else:
+        raise ValueError(f"Invalid mode: {mode}")
 
 def clear():
     if messagebox.askokcancel("Confirmation", "Are you sure you want to clear?"):
@@ -975,6 +994,9 @@ def clear():
         elif mode.lower() == 'transition mode':
             clear_arrows()
         update_grid()
+
+def solve():
+    pass
 
 def update_status(message, color="red"):
     if message:
@@ -998,6 +1020,11 @@ eraser_button = tk.Button(root, text="Unselect squares", command=toggle_eraser)
 clear_button = tk.Button(root, text="Clear all", command=clear)
 
 status_label = tk.Label(root, text="", fg="red")
+
+solve_button = tk.Button(root, text="Solve!", command=solve)
+
+solver_menu = ttk.Combobox(root, values=['Value Iteration', 'Policy Iteration', 'Q-Learning'])
+solver_menu.current(0)
 
 # Hide reward-related UI at the start
 update_ui()
