@@ -47,7 +47,8 @@ def pack_things_in_order(show_reward=False,
     trans_prob_frame.pack_forget()
     solve_button.pack_forget()
     solver_menu.pack_forget()
-
+    show_value_function_button.pack_forget()
+    show_optimal_policy_button.pack_forget()
     
     if show_action_menu:
         action_menu.pack()
@@ -70,6 +71,9 @@ def pack_things_in_order(show_reward=False,
     if show_solve_stuff:
         solver_menu.pack()
         solve_button.pack()
+        # also show buttons for showing value and policy
+        show_value_function_button.pack()
+        show_optimal_policy_button.pack()
 
 # Determine the color based on reward value
 def get_color_by_reward(reward):
@@ -420,11 +424,11 @@ class TransitionProbabilitiesFrame(tk.Frame):
         def arrow_clicked():
             global arrows_visible
             arrows_visible = not arrows_visible
-            draw_arrow_button.config(text="Draw Transition Arrows" if not arrows_visible else "Hide Transition Arrows")
+            self.draw_arrow_button.config(text="Draw Transition Arrows" if not arrows_visible else "Hide Transition Arrows")
             self.draw_arrows()
 
-        draw_arrow_button = tk.Button(self, text="Draw Transition Arrows", command=arrow_clicked)
-        draw_arrow_button.grid(row=5, columnspan=4)
+        self.draw_arrow_button = tk.Button(self, text="Draw Transition Arrows", command=arrow_clicked)
+        self.draw_arrow_button.grid(row=5, columnspan=4)
 
         self.updating = True
 
@@ -995,8 +999,137 @@ def clear():
             clear_arrows()
         update_grid()
 
+optimal_policy = None
+value_function = None
+
 def solve():
+    global optimal_policy, value_function
+    if solver_menu.get() == 'Value Iteration':
+        optimal_policy, value_function = value_iteration(grid_state)
+
+def value_iteration(grid_state, discount_factor=0.9, theta=0.0001):
+    """
+    Perform value iteration algorithm.
+
+    Parameters:
+    - grid_state: Grid object containing rewards and transition probabilities
+    - discount_factor: Gamma, the discount factor for future rewards
+    - theta: A threshold for determining the accuracy of the estimation
+
+    Returns:
+    - policy: The optimal policy
+    - V: The value function
+    """
+    V = np.zeros((GRID_HEIGHT, GRID_WIDTH))  # Initialize value function
+    while True:
+        delta = 0
+        for row in range(GRID_HEIGHT):
+            for col in range(GRID_WIDTH):
+                if not grid_state.isActive(row, col):
+                    continue
+                v = V[row, col]
+                # precompute the value for each direction
+                # to avoid recomputing it for each action
+                direction_values = []
+                for direction in range(5): # non-terminate transitions
+                    # (terminate transition has no reward/value)
+                    new_row, new_col = grid_state.getNextState(row, col, direction)
+                    if not grid_state.isActive(new_row, new_col):
+                        direction_values.append(None)
+                        continue
+                    direction_value = grid_state.getReward(row, col) + discount_factor * V[new_row, new_col]
+                    direction_values.append(direction_value)
+                action_values = []
+                for action in range(grid_state.numActions):
+                    # actually do a direction loop here
+                    # that way we can continue if the direction is invalid
+                    action_value = 0
+                    for direction in range(5):
+                        new_row, new_col = grid_state.getNextState(row, col, direction)
+                        if not grid_state.isActive(new_row, new_col):
+                            continue
+                        action_value += grid_state.getTransitionProb(row, col, action, direction) * direction_values[direction]
+                    action_values.append(action_value)
+                V[row, col] = max(action_values)
+                # V[row, col] = max([sum(grid_state.getTransitionProb(row, col, action, direction) *
+                #                       (grid_state.getReward(row, col) + discount_factor * V[grid_state.getNextState(row, col, direction)]))
+                #                   for direction in range(5)]) # 6 directions: North, South, East, West, Stay, Terminate
+                delta = max(delta, abs(v - V[row, col]))
+        if delta < theta:
+            break
+
+    print("Value function:")
+    print(V)
+    # Derive policy from value function
+    policy = np.zeros((GRID_HEIGHT, GRID_WIDTH, grid_state.numActions))
+    for row in range(GRID_HEIGHT):
+        for col in range(GRID_WIDTH):
+            if not grid_state.isActive(row, col):
+                continue
+            direction_values = []
+            for direction in range(5): # non-terminate transitions
+                # (terminate transition has no reward/value)
+                new_row, new_col = grid_state.getNextState(row, col, direction)
+                if not grid_state.isActive(new_row, new_col):
+                    direction_values.append(None)
+                    continue
+                direction_value = grid_state.getReward(row, col) + discount_factor * V[new_row, new_col]
+                direction_values.append(direction_value)
+            action_values = []
+            for action in range(grid_state.numActions):
+                # actually do a direction loop here
+                # that way we can continue if the direction is invalid
+                action_value = 0
+                for direction in range(5):
+                    new_row, new_col = grid_state.getNextState(row, col, direction)
+                    if not grid_state.isActive(new_row, new_col):
+                        continue
+                    action_value += grid_state.getTransitionProb(row, col, action, direction) * direction_values[direction]
+                action_values.append(action_value)
+            # terminate transition has no reward/value
+            action_values.append(action_value)
+            best_action = np.argmax(action_values)
+            policy[row, col, best_action] = 1
+
+    print("Policy:")
+    print(policy)
+
+    return policy, V
+
+def show_optimal_policy():
+    global optimal_policy, arrows_visible
+    if optimal_policy is None:
+        messagebox.showinfo("Info", "Please solve the grid first!")
+        return
+
+    # first clear previous policy arrows and transition arrows
+    clear_arrows()
+    # also change the arrow button in transition mode to say "Draw Transition Arrows"
+
+    trans_prob_frame.draw_arrow_button.config(text="Draw Transition Arrows")
+    # config(text="Draw Transition Arrows")
+    # arrows not visible
+    arrows_visible = True
+
+    for row in range(GRID_HEIGHT):
+        for col in range(GRID_WIDTH):
+            if grid_state.isActive(row, col):
+                best_action = np.argmax(optimal_policy[row, col, :])
+                draw_policy_arrow(row, col, best_action)
+
+def show_value_function():
     pass
+
+def draw_policy_arrow(row, col, action):
+    # assuming 0 = east, 1 = south, 2 = west, 3 = north
+    if action == 0:
+        draw_arrow((row, col), (row, col+1))
+    elif action == 1:
+        draw_arrow((row, col), (row+1, col))
+    elif action == 2:
+        draw_arrow((row, col), (row, col-1))
+    elif action == 3:
+        draw_arrow((row, col), (row-1, col))
 
 def update_status(message, color="red"):
     if message:
@@ -1025,6 +1158,9 @@ solve_button = tk.Button(root, text="Solve!", command=solve)
 
 solver_menu = ttk.Combobox(root, values=['Value Iteration', 'Policy Iteration', 'Q-Learning'])
 solver_menu.current(0)
+
+show_optimal_policy_button = tk.Button(root, text="Show Optimal Policy", command=show_optimal_policy)
+show_value_function_button = tk.Button(root, text="Show Value Function", command=show_value_function)
 
 # Hide reward-related UI at the start
 update_ui()
