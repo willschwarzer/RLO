@@ -49,6 +49,7 @@ def pack_things_in_order(show_reward=False,
     solver_menu.pack_forget()
     show_value_function_button.pack_forget()
     show_optimal_policy_button.pack_forget()
+    gamma_entry.pack_forget()
     
     if show_action_menu:
         action_menu.pack()
@@ -70,8 +71,16 @@ def pack_things_in_order(show_reward=False,
         trans_prob_frame.pack()
     if show_solve_stuff:
         solver_menu.pack()
+        # gamma_entry.pack()
+        # pack gamma label to the left of the entry
+        gamma_label.pack()
+        gamma_entry.pack()
+        # gamma_label.grid(row=1, column=0)
+        # gamma_entry.grid(row=1, column=1)
         solve_button.pack()
         # also show buttons for showing value and policy
+        # show_value_function_button.grid(row=2, column=0, columnspan=1)
+        # show_optimal_policy_button.grid(row=2, column=1, columnspan=1)
         show_value_function_button.pack()
         show_optimal_policy_button.pack()
 
@@ -115,7 +124,6 @@ def get_saturated_color(base_color, saturation):
         return '#FFFFFF'  # Fallback to white if an unrecognized color is passed
     return f'#{r:02x}{g:02x}{b:02x}'  # Return the hex color code
 
-
 # Initialize the grid with colors based on reward values
 grid = [[{'color': get_color_by_reward(0.0), 'reward': 0.0} for _ in range(GRID_WIDTH)] for _ in range(GRID_HEIGHT)]
 
@@ -123,12 +131,10 @@ grid = [[{'color': get_color_by_reward(0.0), 'reward': 0.0} for _ in range(GRID_
 drawing = False
 reward_mode = False
 
-# Determine the color based on reward value
-def get_color_by_reward(reward):
-    global max_abs_reward
-    # Calculate saturation based on the magnitude of the reward
-    saturation = abs(reward) / (max_abs_reward + 1e-6)
-    base_color = 'green' if reward > 0 else ('red' if reward < 0 else 'white')
+def get_color_by_value(value, max_abs_value):
+    # Calculate saturation based on the magnitude of the value
+    saturation = abs(value) / (max_abs_value + 1e-6)
+    base_color = 'green' if value > 0 else ('red' if value < 0 else 'white')
     if base_color == 'white':
         return base_color
     return get_saturated_color(base_color, saturation)
@@ -243,24 +249,33 @@ def open_standard_actions_settings():
         var.trace('w', update_probs)
 
     # Create and layout labels and entries for probabilities
-    directions = ["Move Forward", "Slip Backward", "Slip Left", "Slip Right", "Terminate", "Stay Still"]
+    directions = ["Move Forward", "Slip Backward", "Slip Left", "Slip Right"]
     for i, (direction, var) in enumerate(zip(directions, prob_vars)):
         tk.Label(action_window, text=direction).grid(row=i, column=0)
         entry = tk.Entry(action_window, textvariable=var)
         entry.grid(row=i, column=1)
-        if direction == "Stay Still":
-            entry.config(state='readonly')  # Disable editing for Stay Still probability
+        # if direction == "Stay Still":
+        #     entry.config(state='readonly')  # Disable editing for Stay Still probability
+    # Do terminate and stay still manually
+    tk.Label(action_window, text="Terminate").grid(row=len(directions), column=0)
+    entry = tk.Entry(action_window, textvariable=terminate_var)
+    entry.grid(row=len(directions), column=1)
+
+    tk.Label(action_window, text="Stay Still").grid(row=len(directions)+1, column=0)
+    entry = tk.Entry(action_window, textvariable=stay_still_var, state='readonly')
+    entry.grid(row=len(directions)+1, column=1)
 
     def apply_to_all_states():
         if messagebox.askokcancel("Confirmation", "Create four actions with these transitions for all states?"):
             save_standard_actions(*prob_vars)
-            update_ui()
+            # update_ui()
+            trans_prob_frame.load_probabilities()
             action_window.destroy()
 
     # Save and Close buttons
     save_button = tk.Button(action_window, text="Apply to all states", command=apply_to_all_states)
-    save_button.grid(row=len(directions), columnspan=2)
-    tk.Button(action_window, text="Close", command=action_window.destroy).grid(row=len(directions) + 1, columnspan=2)
+    save_button.grid(row=len(directions)+2, columnspan=2)
+    tk.Button(action_window, text="Close", command=action_window.destroy).grid(row=len(directions) + 3, columnspan=2)
 
 
 
@@ -290,13 +305,16 @@ def draw_arrow(start, end):
         x2_pixel = x1_pixel + (x2_pixel - x1_pixel) // 2
     # Draw the arrow
     arrow = canvas.create_line(x1_pixel, y1_pixel, x2_pixel, y2_pixel, arrow=tk.LAST, fill='#BF40BF') # purple
-    canvas.tag_bind(arrow, '<Button-1>', lambda event, a=arrow: select_arrow(event, a))
+    # canvas.tag_bind(arrow, '<Button-1>', lambda event, a=arrow: select_arrow(event, a))
     arrows[(x1_pixel,y1_pixel,x2_pixel,y2_pixel)] = arrow
 
 def delete_arrows():
     keys = list(arrows.keys())
     for arrow_key in keys:
         if arrow_key[1] == 'stay':
+            canvas.delete(arrows[arrow_key][0])
+            canvas.delete(arrows[arrow_key][1])
+        elif arrow_key[1] == 'terminate':
             canvas.delete(arrows[arrow_key][0])
             canvas.delete(arrows[arrow_key][1])
         else:
@@ -352,6 +370,17 @@ def draw_stay_arrow(cell):
 
     arrows[cell, 'stay'] = (arc, arrowhead)  # Store the arrow components
 
+def draw_terminate_arrow(cell):
+    row, col = cell
+    # draw an X through the middle ninth of the cell
+    x1 = col * CELL_SIZE + CELL_SIZE // 3
+    y1 = row * CELL_SIZE + CELL_SIZE // 3
+    x2 = col * CELL_SIZE + 2 * CELL_SIZE // 3
+    y2 = row * CELL_SIZE + 2 * CELL_SIZE // 3
+    line1 = canvas.create_line(x1, y1, x2, y2, fill='#BF40BF')
+    line2 = canvas.create_line(x1, y2, x2, y1, fill='#BF40BF')
+    arrows[cell, 'terminate'] = (line1, line2)
+
 
 def delete_stay_arrow(cell):
     if (cell, 'stay') in arrows:
@@ -359,6 +388,13 @@ def delete_stay_arrow(cell):
         canvas.delete(arc)
         canvas.delete(arrowhead_line)
         del arrows[cell, 'stay']
+
+def delete_terminate_arrow(cell):
+    if (cell, 'terminate') in arrows:
+        line1, line2 = arrows[cell, 'terminate']
+        canvas.delete(line1)
+        canvas.delete(line2)
+        del arrows[cell, 'terminate']
 
 
 def select_arrow(event, arrow):
@@ -417,9 +453,12 @@ class TransitionProbabilitiesFrame(tk.Frame):
         standard_actions_button = tk.Button(self, text="Use Slippery Gridworld Transitions", command=open_standard_actions_settings)
         standard_actions_button.grid(row=3, columnspan=4)  # Adjust row and columnspan according to your layout
 
-        self.use_standard_action_probs_button = tk.Button(self, 
-            text="Use Standard Action Probabilities", command=self.use_standard_action_probs, state='disabled')
-        self.use_standard_action_probs_button.grid(row=4, columnspan=4)
+        # self.use_standard_action_probs_button = tk.Button(self, 
+        #     text="Use Standard Action Probabilities", command=self.use_standard_action_probs, state='disabled')
+        # self.use_standard_action_probs_button.grid(row=4, columnspan=4)
+
+        terminal_button = tk.Button(self, text="Set as Terminal State", command=self.set_terminal_state)
+        terminal_button.grid(row=4, columnspan=4)
 
         def arrow_clicked():
             global arrows_visible
@@ -458,11 +497,29 @@ class TransitionProbabilitiesFrame(tk.Frame):
                         if col > 0 and grid_state.isActive(row, col-1):
                             if probs[3] > 0:
                                 draw_arrow((row, col), (row, col-1))
+                        if probs[4] > 0:
+                            draw_terminate_arrow((row, col))
                         if probs[-1] > 0:
                             draw_stay_arrow((row, col))
 
                         # How do we handle stay arrow?
 
+    def set_terminal_state(self):
+        global selected_cell
+        if selected_cell is None:
+            return
+        row, col = selected_cell
+        # self.prob_vars[4] = 1.0
+        # self.stay_prob_var = 0.0
+        # for i in range(4):
+        #     self.prob_vars[i] = 0.0
+        # probs = self.get_probabilities()
+        probs = [0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+        for action in range(num_actions):
+            save_transitions(grid_state, row, col, action, probs)
+        self.draw_arrows()
+        self.load_probabilities()
+        
 
     def use_standard_action_probs(self):
         global selected_cell, action_var
@@ -545,12 +602,16 @@ class TransitionProbabilitiesFrame(tk.Frame):
         probs = grid_state.actions[row, col, action, :]
 
         # Update the probability variables with the retrieved values
-        for i in range(5):  # For North, South, East, West, Terminate
+        for i in range(5):  # For North, South, East, West
             self.prob_vars[i].set(f"{probs[i]:.5g}")
+        
 
         # Update the stay probability
         # self.stay_prob_var.set(str(probs[5]))
         self.stay_prob_var.set(f"{probs[5]:.5g}")
+
+        # Update the terminate probability
+        # self.prob_vars[4].set(f"{probs[4]:.5g}")
         self.updating = True
         self.draw_arrows() # XXX why the fresh heck am I doing this here?
 
@@ -560,6 +621,7 @@ class TransitionProbabilitiesFrame(tk.Frame):
             self.disable_entries()
             return
         row, col = selected_cell
+        self.entries[4].config(state='normal')
         if not grid_state.isActive(row-1, col):
             self.entries[0].config(state='readonly')
         else:
@@ -577,13 +639,13 @@ class TransitionProbabilitiesFrame(tk.Frame):
         else:
             self.entries[3].config(state='normal')
         self.stay_entry.config(state='readonly')  # Stay entry should remain read-only
-        self.use_standard_action_probs_button.config(state='normal')
+        # self.use_standard_action_probs_button.config(state='normal')
 
     def disable_entries(self):
         for entry in self.entries:
             entry.config(state='disabled')
         self.stay_entry.config(state='disabled')
-        self.use_standard_action_probs_button.config(state='disabled')
+        # self.use_standard_action_probs_button.config(state='disabled')
 
 trans_prob_frame = TransitionProbabilitiesFrame(root)
 
@@ -681,10 +743,10 @@ def save_transitions(grid, row, col, action_index, prob_values):
     # Ensure the sum of the first five probabilities (excluding the terminate probability) is <= 1
 
     # Save probabilities in the transitions array
+    # except right now 
     grid.addActionList((row, col), action_index, prob_values)
 
-def save_standard_actions(move_up_var, move_down_var, move_left_var, move_right_var, stay_still_var, terminate_var):
-    total_prob = 0
+def save_standard_actions(move_up_var, move_down_var, move_left_var, move_right_var, terminate_var, stay_still_var):
     forward_prob = move_up_var.get()
     backward_prob = move_down_var.get()
     slip_left_prob = move_left_var.get()
@@ -695,8 +757,8 @@ def save_standard_actions(move_up_var, move_down_var, move_left_var, move_right_
     standard_transition_probs[1] = backward_prob
     standard_transition_probs[2] = slip_left_prob
     standard_transition_probs[3] = slip_right_prob
-    standard_transition_probs[4] = stay_prob
-    standard_transition_probs[5] = terminate_prob
+    standard_transition_probs[4] = terminate_prob
+    standard_transition_probs[5] = stay_prob
     for action_index in range(4):  # Assuming 4 actions
         apply_standard_probabilities_to_action(action_index, standard_transition_probs)
     # total_prob = up_prob + down_prob + left_prob + right_prob + stay_prob + terminate_prob
@@ -718,42 +780,38 @@ def save_standard_actions(move_up_var, move_down_var, move_left_var, move_right_
 def apply_standard_probabilities_to_action(action_index, standard_transition_probs):
     for row in range(GRID_HEIGHT):
         for col in range(GRID_WIDTH):
-            if grid_state.isActive(row, col):
-                # Initialize probabilities
-                probs = [0.0, 0.0, 0.0, 0.0, standard_transition_probs[4], standard_transition_probs[5]]
-                # [North, South, East, West, Stay, Terminate]
-                # on the other hand, standard_transition_probs is [Forward, Backward, Left, Right, Stay, Terminate]
+            # Initialize probabilities
+            probs = [0.0, 0.0, 0.0, 0.0, standard_transition_probs[4], standard_transition_probs[5]]
+            # Check and set probabilities based on the active state of neighboring cells
+            if action_index == 0:  # Attempt to go east
+                probs[2] = standard_transition_probs[0] if col < GRID_WIDTH-1 and grid_state.isActive(row, col+1) else 0 # East (successfully moved forward)
+                probs[1] = standard_transition_probs[3] if row < GRID_HEIGHT-1 and grid_state.isActive(row+1, col) else 0 # South (slipped right)
+                probs[3] = standard_transition_probs[1] if col > 0 and grid_state.isActive(row, col-1) else 0 # West (slipped backward)
+                probs[0] = standard_transition_probs[2] if row > 0 and grid_state.isActive(row-1, col) else 0 # North (slipped left)
+            # ... [similar logic for actions 1, 2, and 3]
+            if action_index == 1: # Attempt to go south
+                probs[1] = standard_transition_probs[0] if row < GRID_HEIGHT-1 and grid_state.isActive(row+1, col) else 0 # South (successfully moved forward)
+                probs[3] = standard_transition_probs[3] if col > 0 and grid_state.isActive(row, col-1) else 0 # West (slipped right)
+                probs[0] = standard_transition_probs[1] if row > 0 and grid_state.isActive(row-1, col) else 0 # North (slipped backward)
+                probs[2] = standard_transition_probs[2] if col < GRID_WIDTH-1 and grid_state.isActive(row, col+1) else 0 # East (slipped left)
+            if action_index == 2: # Attempt to go west
+                probs[3] = standard_transition_probs[0] if col > 0 and grid_state.isActive(row, col-1) else 0 # West (successfully moved forward)
+                probs[0] = standard_transition_probs[3] if row > 0 and grid_state.isActive(row-1, col) else 0 # North (slipped right)
+                probs[2] = standard_transition_probs[1] if col < GRID_WIDTH-1 and grid_state.isActive(row, col+1) else 0 # East (slipped backward)
+                probs[1] = standard_transition_probs[2] if row < GRID_HEIGHT-1 and grid_state.isActive(row+1, col) else 0 # South (slipped left)
+            if action_index == 3: # Attempt to go north
+                probs[0] = standard_transition_probs[0] if row > 0 and grid_state.isActive(row-1, col) else 0 # North (successfully moved forward)
+                probs[2] = standard_transition_probs[3] if col < GRID_WIDTH-1 and grid_state.isActive(row, col+1) else 0 # East (slipped right)
+                probs[1] = standard_transition_probs[1] if row < GRID_HEIGHT-1 and grid_state.isActive(row+1, col) else 0 # South (slipped backward)
+                probs[3] = standard_transition_probs[2] if col > 0 and grid_state.isActive(row, col-1) else 0 # West (slipped left)
 
-                # Check and set probabilities based on the active state of neighboring cells
-                if action_index == 0:  # Attempt to go east
-                    probs[2] = standard_transition_probs[0] if col < GRID_WIDTH-1 and grid_state.isActive(row, col+1) else 0 # East (successfully moved forward)
-                    probs[1] = standard_transition_probs[3] if row < GRID_HEIGHT-1 and grid_state.isActive(row+1, col) else 0 # South (slipped right)
-                    probs[3] = standard_transition_probs[1] if col > 0 and grid_state.isActive(row, col-1) else 0 # West (slipped backward)
-                    probs[0] = standard_transition_probs[2] if row > 0 and grid_state.isActive(row-1, col) else 0 # North (slipped left)
-                # ... [similar logic for actions 1, 2, and 3]
-                if action_index == 1: # Attempt to go south
-                    probs[1] = standard_transition_probs[0] if row < GRID_HEIGHT-1 and grid_state.isActive(row+1, col) else 0 # South (successfully moved forward)
-                    probs[3] = standard_transition_probs[3] if col > 0 and grid_state.isActive(row, col-1) else 0 # West (slipped right)
-                    probs[0] = standard_transition_probs[1] if row > 0 and grid_state.isActive(row-1, col) else 0 # North (slipped backward)
-                    probs[2] = standard_transition_probs[2] if col < GRID_WIDTH-1 and grid_state.isActive(row, col+1) else 0 # East (slipped left)
-                if action_index == 2: # Attempt to go west
-                    probs[3] = standard_transition_probs[0] if col > 0 and grid_state.isActive(row, col-1) else 0 # West (successfully moved forward)
-                    probs[0] = standard_transition_probs[3] if row > 0 and grid_state.isActive(row-1, col) else 0 # North (slipped right)
-                    probs[2] = standard_transition_probs[1] if col < GRID_WIDTH-1 and grid_state.isActive(row, col+1) else 0 # East (slipped backward)
-                    probs[1] = standard_transition_probs[2] if row < GRID_HEIGHT-1 and grid_state.isActive(row+1, col) else 0 # South (slipped left)
-                if action_index == 3: # Attempt to go north
-                    probs[0] = standard_transition_probs[0] if row > 0 and grid_state.isActive(row-1, col) else 0 # North (successfully moved forward)
-                    probs[2] = standard_transition_probs[3] if col < GRID_WIDTH-1 and grid_state.isActive(row, col+1) else 0 # East (slipped right)
-                    probs[1] = standard_transition_probs[1] if row < GRID_HEIGHT-1 and grid_state.isActive(row+1, col) else 0 # South (slipped backward)
-                    probs[3] = standard_transition_probs[2] if col > 0 and grid_state.isActive(row, col-1) else 0 # West (slipped left)
+            # Calculate the total move probability and adjust the stay probability
+            total_move_prob = sum(probs[:5])  # Sum of the first four probabilities (excluding stay)
+            remaining_prob = 1 - total_move_prob # Remaining probability for stay
+            probs[5] = remaining_prob
 
-                # Calculate the total move probability and adjust the stay probability
-                total_move_prob = sum(probs[:5])  # Sum of the first four probabilities (excluding stay and terminate)
-                remaining_prob = 1 - total_move_prob # Remaining probability for stay
-                probs[5] = remaining_prob
-
-                # Save the adjusted probabilities for the action
-                grid_state.addActionList((row, col), action_index, probs)
+            # Save the adjusted probabilities for the action
+            grid_state.addActionList((row, col), action_index, probs)
 
 #TODO delete
 def show_transition_table_old(row, col, action):
@@ -904,6 +962,8 @@ def toggle_eraser():
 # Function to update the grid display
 def update_grid():
     mode = modes[mode_var.get()]
+    if mode == "Solve Mode" and value_function is not None:
+        max_abs_value = np.abs(value_function).max()
     for row in range(GRID_HEIGHT):
         for col in range(GRID_WIDTH):
             if grid_state.isActive(row, col):
@@ -911,6 +971,9 @@ def update_grid():
                     # Normalize the start probability to [0, 1] for color saturation
                     saturation = grid_state.startingProbs[row, col] / max(grid_state.startingProbs.max(), 1)
                     cell_color = get_saturated_color("blue", saturation)
+                elif mode == "Solve Mode" and value_function is not None and showing_value_function:
+                    # Normalize the value function to [0, 1] for color saturation
+                    cell_color = get_color_by_value(value_function[row, col], max_abs_value)
                 else:
                     cell_color = get_color_by_reward(grid_state.rewards[row, col])
             else:
@@ -918,10 +981,13 @@ def update_grid():
             canvas.itemconfig(cells[row][col], fill=cell_color)
             
 def update_ui():
-    global selected_cell, highlighted_cell, eraser_active
+    global selected_cell, highlighted_cell, eraser_active, arrows_visible, showing_value_function
     update_grid()
     update_status("")
     mode = modes[mode_var.get()]
+    delete_arrows()
+    arrows_visible = False
+
     if mode.lower() == "reward mode":
         # label_reward.pack()
         # entry_reward.pack()
@@ -974,7 +1040,11 @@ def update_ui():
         # pack_things_in_order(show_mode_label=True, show_eraser=True, show_clear=True, show_action_menu=True)
         pack_things_in_order(show_action_menu=True, show_transition_table=True)
         trans_prob_frame.enable_entries()
-        trans_prob_frame.load_probabilities()
+        # first clear existing arrows
+        # clear_arrows()
+        trans_prob_frame.load_probabilities() # note that this draws arrows
+        # make sure that trans_prob_frame.dra
+        trans_prob_frame.draw_arrow_button.config(text="Draw Transition Arrows" if not arrows_visible else "Hide Transition Arrows")
     elif mode.lower() == "solve mode":
         pack_things_in_order(show_solve_stuff=True)
     else:
@@ -1005,7 +1075,13 @@ value_function = None
 def solve():
     global optimal_policy, value_function
     if solver_menu.get() == 'Value Iteration':
-        optimal_policy, value_function = value_iteration(grid_state)
+        optimal_policy, value_function, its = value_iteration(grid_state, discount_factor=gamma)
+        if showing_value_function:
+            update_grid()
+        # also display the number of iterations
+        update_status(f"Value iteration converged in {its} iterations", color="green")
+        # pack the status label
+        status_label.pack()
 
 def value_iteration(grid_state, discount_factor=0.9, theta=0.0001):
     """
@@ -1021,7 +1097,8 @@ def value_iteration(grid_state, discount_factor=0.9, theta=0.0001):
     - V: The value function
     """
     V = np.zeros((GRID_HEIGHT, GRID_WIDTH))  # Initialize value function
-    while True:
+    its = 0
+    while True and its < 10000:
         delta = 0
         for row in range(GRID_HEIGHT):
             for col in range(GRID_WIDTH):
@@ -1031,35 +1108,33 @@ def value_iteration(grid_state, discount_factor=0.9, theta=0.0001):
                 # precompute the value for each direction
                 # to avoid recomputing it for each action
                 direction_values = []
-                for direction in range(5): # non-terminate transitions
+                for direction in range(6):
                     # (terminate transition has no reward/value)
                     new_row, new_col = grid_state.getNextState(row, col, direction)
                     if not grid_state.isActive(new_row, new_col):
                         direction_values.append(None)
                         continue
-                    direction_value = grid_state.getReward(row, col) + discount_factor * V[new_row, new_col]
+                    direction_value = grid_state.getReward(new_row, new_col) + discount_factor * V[new_row, new_col]
                     direction_values.append(direction_value)
+                # just manually set the terminate transition value to 0
+                direction_values[4] = 0
                 action_values = []
                 for action in range(grid_state.numActions):
                     # actually do a direction loop here
                     # that way we can continue if the direction is invalid
                     action_value = 0
-                    for direction in range(5):
+                    for direction in range(6):
                         new_row, new_col = grid_state.getNextState(row, col, direction)
                         if not grid_state.isActive(new_row, new_col):
                             continue
                         action_value += grid_state.getTransitionProb(row, col, action, direction) * direction_values[direction]
                     action_values.append(action_value)
                 V[row, col] = max(action_values)
-                # V[row, col] = max([sum(grid_state.getTransitionProb(row, col, action, direction) *
-                #                       (grid_state.getReward(row, col) + discount_factor * V[grid_state.getNextState(row, col, direction)]))
-                #                   for direction in range(5)]) # 6 directions: North, South, East, West, Stay, Terminate
                 delta = max(delta, abs(v - V[row, col]))
+        its += 1
         if delta < theta:
             break
 
-    print("Value function:")
-    print(V)
     # Derive policy from value function
     policy = np.zeros((GRID_HEIGHT, GRID_WIDTH, grid_state.numActions))
     for row in range(GRID_HEIGHT):
@@ -1067,14 +1142,16 @@ def value_iteration(grid_state, discount_factor=0.9, theta=0.0001):
             if not grid_state.isActive(row, col):
                 continue
             direction_values = []
-            for direction in range(5): # non-terminate transitions
+            for direction in range(6):
                 # (terminate transition has no reward/value)
                 new_row, new_col = grid_state.getNextState(row, col, direction)
                 if not grid_state.isActive(new_row, new_col):
                     direction_values.append(None)
                     continue
-                direction_value = grid_state.getReward(row, col) + discount_factor * V[new_row, new_col]
+                direction_value = grid_state.getReward(new_row, new_col) + discount_factor * V[new_row, new_col]
                 direction_values.append(direction_value)
+            # just manually set the terminate transition value to 0
+            direction_values[4] = 0
             action_values = []
             for action in range(grid_state.numActions):
                 # actually do a direction loop here
@@ -1091,10 +1168,7 @@ def value_iteration(grid_state, discount_factor=0.9, theta=0.0001):
             best_action = np.argmax(action_values)
             policy[row, col, best_action] = 1
 
-    print("Policy:")
-    print(policy)
-
-    return policy, V
+    return policy, V, its
 
 def show_optimal_policy():
     global optimal_policy, arrows_visible
@@ -1103,10 +1177,10 @@ def show_optimal_policy():
         return
 
     # first clear previous policy arrows and transition arrows
-    clear_arrows()
+    delete_arrows()
     # also change the arrow button in transition mode to say "Draw Transition Arrows"
 
-    trans_prob_frame.draw_arrow_button.config(text="Draw Transition Arrows")
+    # trans_prob_frame.draw_arrow_button.config(text="Draw Transition Arrows")
     # config(text="Draw Transition Arrows")
     # arrows not visible
     arrows_visible = True
@@ -1115,21 +1189,47 @@ def show_optimal_policy():
         for col in range(GRID_WIDTH):
             if grid_state.isActive(row, col):
                 best_action = np.argmax(optimal_policy[row, col, :])
-                draw_policy_arrow(row, col, best_action)
+                # figure out which direction is most likely after taking the best action
+                transition_probs = grid_state.actions[row, col, best_action, :]
+                direction = np.argmax(transition_probs)
+                draw_policy_arrow(row, col, direction)
+    arrows_visible = False
+
+showing_value_function = False
 
 def show_value_function():
-    pass
+    global showing_value_function
+    showing_value_function = not showing_value_function
+    # change the button text
+    if showing_value_function:
+        show_value_function_button.config(text="Hide Value Function")
+    else:
+        show_value_function_button.config(text="Show Value Function")
+    update_grid()
 
 def draw_policy_arrow(row, col, action):
     # assuming 0 = east, 1 = south, 2 = west, 3 = north
+    # if action == 0:
+    #     draw_arrow((row, col), (row, col+1))
+    # elif action == 1:
+    #     draw_arrow((row, col), (row+1, col))
+    # elif action == 2:
+    #     draw_arrow((row, col), (row, col-1))
+    # elif action == 3:
+    #     draw_arrow((row, col), (row-1, col))
+    # assuming 0 = north, 1 = south, 2 = east, 3 = west
     if action == 0:
-        draw_arrow((row, col), (row, col+1))
+        draw_arrow((row, col), (row-1, col))
     elif action == 1:
         draw_arrow((row, col), (row+1, col))
     elif action == 2:
-        draw_arrow((row, col), (row, col-1))
+        draw_arrow((row, col), (row, col+1))
     elif action == 3:
-        draw_arrow((row, col), (row-1, col))
+        draw_arrow((row, col), (row, col-1))
+    elif action == 4:
+        draw_terminate_arrow((row, col))
+    elif action == 5:
+        draw_stay_arrow((row, col))
 
 def update_status(message, color="red"):
     if message:
@@ -1158,6 +1258,30 @@ solve_button = tk.Button(root, text="Solve!", command=solve)
 
 solver_menu = ttk.Combobox(root, values=['Value Iteration', 'Policy Iteration', 'Q-Learning'])
 solver_menu.current(0)
+
+# text field for setting gamma/discount factor
+
+gamma = 0.9
+gamma_var = tk.StringVar(value=f"{gamma:.5g}")
+def update_gamma(name, *args):
+    global gamma
+    # Handle negative probabilities
+    try:
+        gamma = float(gamma_var.get())
+        if gamma < 0:
+            gamma = 0.0
+            gamma_var.set(f"{gamma:.5g}")
+        if gamma > 1:
+            gamma = 1.0
+            gamma_var.set(f"{gamma:.5g}")
+    except:
+        pass
+# just use a trace
+gamma_entry = tk.Entry(root, textvariable=gamma_var)
+gamma_var.trace("w", update_gamma)
+
+# label for gamma text field
+gamma_label = tk.Label(root, text="Discount Factor (Gamma):")
 
 show_optimal_policy_button = tk.Button(root, text="Show Optimal Policy", command=show_optimal_policy)
 show_value_function_button = tk.Button(root, text="Show Value Function", command=show_value_function)
