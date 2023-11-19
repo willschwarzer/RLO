@@ -6,6 +6,7 @@ from model.grid import Grid
 from matplotlib import pyplot as plt
 import os
 import datetime
+from tqdm import tqdm
 
 # Constants for grid dimensions and cell size
 GRID_WIDTH = 10
@@ -968,8 +969,18 @@ def toggle_eraser():
 # Function to update the grid display
 def update_grid():
     mode = modes[mode_var.get()]
-    if mode == "Solve Mode" and value_function is not None:
+    # show optimal value function if in solve mode and using Value Iteration
+    if mode == "Solve Mode" and showing_value_function:
+        if solver_menu.get() == 'Value Iteration' and optimal_value_function is not None:
+            value_function = optimal_value_function
+        elif learned_value_function is not None:
+            value_function = learned_value_function
+        else:
+            value_function = None
         max_abs_value = np.abs(value_function).max()
+        #     max_abs_value = np.abs(optimal_value_function).max()
+        # else:
+        #     max_abs_value = np.abs(learned_value_function).max()
     for row in range(GRID_HEIGHT):
         for col in range(GRID_WIDTH):
             if grid_state.isActive(row, col):
@@ -977,7 +988,7 @@ def update_grid():
                     # Normalize the start probability to [0, 1] for color saturation
                     saturation = grid_state.startingProbs[row, col] / max(grid_state.startingProbs.max(), 1)
                     cell_color = get_saturated_color("blue", saturation)
-                elif mode == "Solve Mode" and value_function is not None and showing_value_function:
+                elif mode == "Solve Mode" and showing_value_function and value_function is not None:
                     # Normalize the value function to [0, 1] for color saturation
                     cell_color = get_color_by_value(value_function[row, col], max_abs_value)
                 else:
@@ -1053,6 +1064,11 @@ def update_ui():
         trans_prob_frame.draw_arrow_button.config(text="Draw Transition Arrows" if not arrows_visible else "Hide Transition Arrows")
     elif mode.lower() == "solve mode":
         pack_things_in_order(show_solve_stuff=True)
+        # button text
+        show_optimal_policy_button.config(text="Hide Optimal Policy" if showing_policy else "Show Optimal Policy")
+        # show policy if we're showing policy
+        if showing_policy:
+            show_policy()
     else:
         raise ValueError(f"Invalid mode: {mode}")
 
@@ -1076,14 +1092,16 @@ def clear():
         update_grid()
 
 optimal_policy = None
-value_function = None
+optimal_value_function = None
+learned_policy = None
+learned_value_function = None
 
 def solve():
-    global optimal_policy, value_function
+    global optimal_policy, optimal_value_function, learned_policy, learned_value_function
     update_status("")
     status_label.pack_forget()
     if solver_menu.get() == 'Value Iteration':
-        optimal_policy, value_function, its = value_iteration(grid_state, discount_factor=gamma)
+        optimal_policy, optimal_value_function, its = value_iteration(grid_state, discount_factor=gamma)
         if showing_value_function:
             update_grid()
         # also display the number of iterations
@@ -1122,20 +1140,20 @@ def solve():
         core = Core(agent, gridworld)
         num_epochs = 10
         # for epoch in range(num_epochs):
-        num_epochs = 100  # Total number of epochs
+        num_epochs = 1000  # Total number of epochs
         episodes_per_epoch = 1  # Number of episodes per epoch
 
-        learning_curve = []
-        for epoch in range(num_epochs):
-            core.learn(n_episodes=episodes_per_epoch, n_steps_per_fit=1)  # Learn from specified number of episodes
+        rets = []
+        durations = []
+        for epoch in tqdm(range(num_epochs)):
+            core.learn(n_episodes=episodes_per_epoch, n_steps_per_fit=1, quiet=True)  # Learn from specified number of episodes
             evaluation_results = core.evaluate(n_episodes=1)  # Evaluate the agent's performance
-            ave_ret = calculate_average_episode_return(evaluation_results, gamma)  # Calculate the average return
-            learning_curve.append(ave_ret)  # Append the average return to the learning curve
-            update_status(f"Epoch {epoch+1}/{num_epochs}, Agent's average return: {ave_ret:.5g}", color="green")
-            status_label.pack()
+            ave_ret, ave_duration = calculate_episode_stats(evaluation_results, gamma)  # Calculate the average return
+            rets.append(ave_ret)  # Append the average return to the learning curve
+            durations.append(ave_duration)  # Append the average duration to the learning curve
 
         # Plot the learning curve
-        plot_learning_curve(learning_curve)
+        plot_learning_curves(rets, durations, solver_menu.get())
         # core.learn(n_episodes=1000, n_steps_per_fit=1)  # Learn from 1 episode at a time
         # histories = core.evaluate(n_episodes=10)
         # # breakpoint()
@@ -1145,24 +1163,46 @@ def solve():
         # status_label.pack()
         # # breakpoint()
 
-def plot_learning_curve(learning_curve):
+        # save the policy and value function
+        # we need to unflatten the agent's Q table first
+        flat_q_table = agent.Q.table
+        q_table = np.zeros((GRID_HEIGHT, GRID_WIDTH, 4))
+        for row in range(GRID_HEIGHT):
+            for col in range(GRID_WIDTH):
+                    q_table[row, col] = flat_q_table[GRID_WIDTH * row + col]
+                    # take the max over actions
+        v_table = np.max(q_table, axis=2)
+        learned_value_function = v_table
+        # because of the way we visualize the policy, it can actually just be the Q function
+        learned_policy = q_table
+
+def plot_learning_curves(learning_curve, durations, algorithm):
     # Ensure the 'experiments' folder exists
     folder_name = "experiments"
     os.makedirs(folder_name, exist_ok=True)
     # Generate a filename based on the current time
     timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    filename = f"{folder_name}/learning_curve_{timestamp}.png"
+    ret_filename = f"{folder_name}/{algorithm}_learning_curve_{timestamp}.png"
+    dur_filename = f"{folder_name}/{algorithm}_durations_{timestamp}.png"
+
+    # Create and save the plot
+    plt.figure()
+    plt.plot(durations)
+    plt.xlabel('Episodes')
+    plt.ylabel('Duration')
+    plt.title('Duration Curve for ' + algorithm)
+    plt.savefig(dur_filename)
 
     # Create and save the plot
     plt.figure()
     plt.plot(learning_curve)
-    plt.xlabel('Epochs')
-    plt.ylabel('Average Return')
-    plt.title('Learning Curve')
-    plt.savefig(filename)
+    plt.xlabel('Episodes')
+    plt.ylabel('Return')
+    plt.title('Learning Curve for ' + algorithm)
+    plt.savefig(ret_filename)
 
     # Update the status to indicate where the file was saved
-    update_status(f"Saved learning curve to {filename}", color="green")
+    update_status(f"Saved learning curve to {ret_filename}", color="green")
     status_label.pack()
 
     # try to show the plot
@@ -1171,8 +1211,9 @@ def plot_learning_curve(learning_curve):
     except:
         return
 
-def calculate_average_episode_return(evaluation_history, gamma):
+def calculate_episode_stats(evaluation_history, gamma):
     episode_returns = []
+    episode_durations = []
     episode_return = 0
     timestep = 0
 
@@ -1184,10 +1225,12 @@ def calculate_average_episode_return(evaluation_history, gamma):
         if step[-1]:  # Assuming "done" is the last element in the step tuple
             episode_returns.append(episode_return)
             episode_return = 0  # Reset for the next episode
+            episode_durations.append(timestep)
             timestep = 0  # Reset timestep for the next episode
 
     average_return = sum(episode_returns) / len(episode_returns) if episode_returns else 0
-    return average_return
+    average_duration = sum(episode_durations) / len(episode_durations) if episode_durations else 0
+    return average_return, average_duration
 
 def import_mushroom_globally():
     # Importing the necessary modules
@@ -1427,10 +1470,16 @@ def value_iteration(grid_state, discount_factor=0.9, theta=0.0001):
 
     return policy, V, its
 
-def show_optimal_policy():
-    global optimal_policy, arrows_visible
-    if optimal_policy is None:
-        messagebox.showinfo("Info", "Please solve the grid first!")
+showing_policy = False
+
+def show_policy():
+    global arrows_visible, showing_policy
+    if solver_menu.get() == 'Value Iteration':
+        policy = optimal_policy
+    else:
+        policy = learned_policy
+    if policy is None:
+        messagebox.showinfo("Info", "Please solve the gridworld first!")
         return
 
     # first clear previous policy arrows and transition arrows
@@ -1442,14 +1491,23 @@ def show_optimal_policy():
     # arrows not visible
     arrows_visible = True
 
-    for row in range(GRID_HEIGHT):
-        for col in range(GRID_WIDTH):
-            if grid_state.isActive(row, col):
-                best_action = np.argmax(optimal_policy[row, col, :])
-                # figure out which direction is most likely after taking the best action
-                transition_probs = grid_state.actions[row, col, best_action, :]
-                direction = np.argmax(transition_probs)
-                draw_policy_arrow(row, col, direction)
+    showing_policy = not showing_policy
+
+    if showing_policy:
+        for row in range(GRID_HEIGHT):
+            for col in range(GRID_WIDTH):
+                if grid_state.isActive(row, col):
+                    best_action = np.argmax(policy[row, col, :])
+                    # figure out which direction is most likely after taking the best action
+                    transition_probs = grid_state.actions[row, col, best_action, :]
+                    direction = np.argmax(transition_probs)
+                    draw_policy_arrow(row, col, direction)
+        # change the button text
+        show_optimal_policy_button.config(text="Hide Policy")
+    else:
+        delete_arrows()
+        # change the button text
+        show_optimal_policy_button.config(text="Show Policy")
     arrows_visible = False
 
 showing_value_function = False
@@ -1540,7 +1598,7 @@ gamma_var.trace("w", update_gamma)
 # label for gamma text field
 gamma_label = tk.Label(root, text="Discount Factor (Gamma):")
 
-show_optimal_policy_button = tk.Button(root, text="Show Optimal Policy", command=show_optimal_policy)
+show_optimal_policy_button = tk.Button(root, text="Show Policy", command=show_policy)
 show_value_function_button = tk.Button(root, text="Show Value Function", command=show_value_function)
 
 # Hide reward-related UI at the start
