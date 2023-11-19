@@ -230,9 +230,12 @@ def open_standard_actions_settings():
     def update_probs(name, *args):
         # Handle negative probabilities
         for var in prob_vars[:-1]:
-            if var.get() < 0:
+            try:
+                if var.get() < 0:
+                    var.set(0)
+            except:
                 var.set(0)
-
+        
         total_move_prob = sum(var.get() for var in prob_vars[:-1])
         if total_move_prob > 1:
             # Find the variable that was just updated and adjust it
@@ -1074,6 +1077,8 @@ value_function = None
 
 def solve():
     global optimal_policy, value_function
+    update_status("")
+    status_label.pack_forget()
     if solver_menu.get() == 'Value Iteration':
         optimal_policy, value_function, its = value_iteration(grid_state, discount_factor=gamma)
         if showing_value_function:
@@ -1082,6 +1087,201 @@ def solve():
         update_status(f"Value iteration converged in {its} iterations", color="green")
         # pack the status label
         status_label.pack()
+    else:
+        # check if starting probs sum to 1
+        if np.sum(grid_state.startingProbs) != 1.0:
+            update_status(f"Illegal MDP: sum of starting probs is {np.sum(grid_state.startingProbs)}", color="red")
+            # pack the status label
+            status_label.pack()
+            return
+        # these imports take absolutely forever otherwise
+        if 'Environment' not in globals():
+            import_mushroom_globally()
+        
+        MushroomGridworld = define_gridworld()
+        gridworld = MushroomGridworld(grid_state, gamma)
+        epsilon = Parameter(value=0.1)
+        policy = EpsGreedy(epsilon=epsilon)
+        learning_rate = Parameter(value=0.1)
+        q_learning = QLearning(mdp_info=gridworld.info, 
+                               policy=policy,
+                               learning_rate=learning_rate,)
+        core = Core(q_learning, gridworld)
+        num_epochs = 10
+        # for epoch in range(num_epochs):
+        core.learn(n_episodes=1000, n_steps_per_fit=1)  # Learn from 1 episode at a time
+        histories = core.evaluate(n_episodes=10)
+        # breakpoint()
+        # ave_ret = np.mean([step[2] for step in histories])
+        ave_ret = calculate_average_episode_return(histories, gamma)
+        update_status(f"Agent's average return: {ave_ret:.5g}", color="green")
+        status_label.pack()
+        # breakpoint()
+
+def calculate_average_episode_return(evaluation_history, gamma):
+    episode_returns = []
+    episode_return = 0
+    timestep = 0
+
+    for step in evaluation_history:
+        reward = step[2]  # Assuming the reward is the third element in the step tuple
+        episode_return += (gamma ** timestep) * reward
+        timestep += 1
+
+        if step[-1]:  # Assuming "done" is the last element in the step tuple
+            episode_returns.append(episode_return)
+            episode_return = 0  # Reset for the next episode
+            timestep = 0  # Reset timestep for the next episode
+
+    average_return = sum(episode_returns) / len(episode_returns) if episode_returns else 0
+    return average_return
+
+def import_mushroom_globally():
+    # Importing the necessary modules
+    from mushroom_rl.core import Environment, MDPInfo
+    from mushroom_rl.core.agent import Agent
+    from mushroom_rl.algorithms.value import QLearning
+    from mushroom_rl.policy import EpsGreedy
+    from mushroom_rl.utils.parameters import Parameter
+    from mushroom_rl.core import Core
+    from mushroom_rl.utils.spaces import Discrete
+
+    # Adding them to the global namespace
+    globals()['Environment'] = Environment
+    globals()['MDPInfo'] = MDPInfo
+    globals()['Agent'] = Agent
+    globals()['QLearning'] = QLearning
+    globals()['EpsGreedy'] = EpsGreedy
+    globals()['Parameter'] = Parameter
+    globals()['Core'] = Core
+    globals()['Discrete'] = Discrete
+
+def define_gridworld():
+    class MushroomGridworld(Environment):
+        def __init__(self, grid_state, gamma):
+            self.gridworld = grid_state
+            n_states = 100
+            n_actions = 4
+
+            # Define the state and action spaces
+            self._state_space = Discrete(n_states)
+            self._action_space = Discrete(n_actions)
+
+            # Define the reward range and discount factor
+            # reward_range = (-1, 1)  # Example: rewards range between -1 and 1
+            # calculate actual reward range
+            min_rew = np.min(self.gridworld.rewards)
+            max_rew = np.max(self.gridworld.rewards)
+            # reward_range = (min_rew, max_rew)
+            horizon = 1e2 # I don't think we need finite horizon here, but doing it anyway for debugging
+
+            # Set the MDP information
+            self._mdp_info = MDPInfo(self._state_space, 
+                                     self._action_space, 
+                                     gamma, 
+                                     horizon,)
+                                    #  reward_range,)
+
+            self.reset()
+
+        def reset(self, state=None):
+            """
+            Reset the environment to an initial state.
+
+            The state is chosen randomly based on the starting probabilities.
+            If a specific state is provided, the environment is reset to that state.
+            """
+            if state is not None:
+                # Reset to the specified state
+                initial_state = state
+            else:
+                # Choose a random initial state based on starting probabilities
+                flattened_probs = self.gridworld.startingProbs.flatten()
+                initial_state = np.random.choice(len(flattened_probs), p=flattened_probs)
+
+            self.current_state = self._unflatten_state(initial_state)
+
+            return np.array([initial_state])
+
+        def step(self, action):
+            """
+            Execute the given action and update the environment's state.
+
+            Parameters:
+            action - the action to be executed in the environment
+
+            Returns:
+            next_state, reward, done, info - where next_state is the new state after the action,
+                                            reward is the reward received from the action,
+                                            done is a boolean indicating whether the episode is finished,
+                                            and info is an optional dictionary with debug information.
+            """
+            current_row, current_col = self.current_state
+
+            # MushroomRL gives actions as np arrays :P
+            if isinstance(action, np.ndarray):
+                action = action.item()
+
+            # Choose the direction based on the action and the transition probabilities
+            direction = np.random.choice(6, p=self.gridworld.actions[current_row, current_col, action])
+
+            done = (direction == 4)
+
+            # Get the next state based on the chosen direction
+            next_row, next_col = self.gridworld.getNextState(current_row, current_col, direction)
+
+            # Check if the next state is active, if not, stay in the current state
+            if not self.gridworld.isActive(next_row, next_col):
+                next_row, next_col = current_row, current_col
+
+            # Calculate the reward
+            if done:
+                reward = 0
+            else:
+                reward = self.gridworld.getReward(next_row, next_col)
+
+            # Update the current state
+            self.current_state = (next_row, next_col)
+            flattened_state = self._flatten_state(self.current_state)
+
+            # Optional additional information
+            info = {}  # You can add any additional debug info here
+
+            return np.array([flattened_state]), reward, done, info
+
+        def _flatten_state(self, state):
+            """
+            Convert a 2D state (row, col) to a 1D state.
+
+            Parameters:
+            state - a tuple (row, col) representing the state in 2D
+
+            Returns:
+            An integer representing the flattened state
+            """
+            row, col = state
+            return row * self.gridworld.cols + col
+
+        def _unflatten_state(self, state):
+            """
+            Convert a 1D state to a 2D state (row, col).
+
+            Parameters:
+            state - an integer representing the flattened state
+
+            Returns:
+            A tuple (row, col) representing the state in 2D
+            """
+            row = state // self.gridworld.cols
+            col = state % self.gridworld.cols
+            return row, col
+
+        @property
+        def info(self):
+            # Return an MDPInfo object describing the environment
+            return self._mdp_info
+        
+    return MushroomGridworld
 
 def value_iteration(grid_state, discount_factor=0.9, theta=0.0001):
     """
@@ -1256,7 +1456,7 @@ status_label = tk.Label(root, text="", fg="red")
 
 solve_button = tk.Button(root, text="Solve!", command=solve)
 
-solver_menu = ttk.Combobox(root, values=['Value Iteration', 'Policy Iteration', 'Q-Learning'])
+solver_menu = ttk.Combobox(root, values=['Value Iteration', 'SARSA', 'Q-Learning'])
 solver_menu.current(0)
 
 # text field for setting gamma/discount factor
