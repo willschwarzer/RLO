@@ -3,6 +3,9 @@ from tkinter import messagebox
 from tkinter import ttk
 import numpy as np
 from model.grid import Grid
+from matplotlib import pyplot as plt
+import os
+import datetime
 
 # Constants for grid dimensions and cell size
 GRID_WIDTH = 10
@@ -1103,20 +1106,70 @@ def solve():
         epsilon = Parameter(value=0.1)
         policy = EpsGreedy(epsilon=epsilon)
         learning_rate = Parameter(value=0.1)
-        q_learning = QLearning(mdp_info=gridworld.info, 
-                               policy=policy,
-                               learning_rate=learning_rate,)
-        core = Core(q_learning, gridworld)
+        if solver_menu.get() == 'Q-Learning':
+            agent = QLearning(mdp_info=gridworld.info, 
+                                policy=policy,
+                                learning_rate=learning_rate,)
+        elif solver_menu.get() == 'SARSA':
+            agent = SARSA(mdp_info=gridworld.info, 
+                                policy=policy,
+                                learning_rate=learning_rate,)
+        else:
+            update_status(f"Invalid algorithm: {solver_menu.get()}", color="red")
+            # pack the status label
+            status_label.pack()
+            return
+        core = Core(agent, gridworld)
         num_epochs = 10
         # for epoch in range(num_epochs):
-        core.learn(n_episodes=1000, n_steps_per_fit=1)  # Learn from 1 episode at a time
-        histories = core.evaluate(n_episodes=10)
-        # breakpoint()
-        # ave_ret = np.mean([step[2] for step in histories])
-        ave_ret = calculate_average_episode_return(histories, gamma)
-        update_status(f"Agent's average return: {ave_ret:.5g}", color="green")
-        status_label.pack()
-        # breakpoint()
+        num_epochs = 100  # Total number of epochs
+        episodes_per_epoch = 1  # Number of episodes per epoch
+
+        learning_curve = []
+        for epoch in range(num_epochs):
+            core.learn(n_episodes=episodes_per_epoch, n_steps_per_fit=1)  # Learn from specified number of episodes
+            evaluation_results = core.evaluate(n_episodes=1)  # Evaluate the agent's performance
+            ave_ret = calculate_average_episode_return(evaluation_results, gamma)  # Calculate the average return
+            learning_curve.append(ave_ret)  # Append the average return to the learning curve
+            update_status(f"Epoch {epoch+1}/{num_epochs}, Agent's average return: {ave_ret:.5g}", color="green")
+            status_label.pack()
+
+        # Plot the learning curve
+        plot_learning_curve(learning_curve)
+        # core.learn(n_episodes=1000, n_steps_per_fit=1)  # Learn from 1 episode at a time
+        # histories = core.evaluate(n_episodes=10)
+        # # breakpoint()
+        # # ave_ret = np.mean([step[2] for step in histories])
+        # ave_ret = calculate_average_episode_return(histories, gamma)
+        # update_status(f"Agent's average return: {ave_ret:.5g}", color="green")
+        # status_label.pack()
+        # # breakpoint()
+
+def plot_learning_curve(learning_curve):
+    # Ensure the 'experiments' folder exists
+    folder_name = "experiments"
+    os.makedirs(folder_name, exist_ok=True)
+    # Generate a filename based on the current time
+    timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    filename = f"{folder_name}/learning_curve_{timestamp}.png"
+
+    # Create and save the plot
+    plt.figure()
+    plt.plot(learning_curve)
+    plt.xlabel('Epochs')
+    plt.ylabel('Average Return')
+    plt.title('Learning Curve')
+    plt.savefig(filename)
+
+    # Update the status to indicate where the file was saved
+    update_status(f"Saved learning curve to {filename}", color="green")
+    status_label.pack()
+
+    # try to show the plot
+    try:
+        plt.show()
+    except:
+        return
 
 def calculate_average_episode_return(evaluation_history, gamma):
     episode_returns = []
@@ -1138,9 +1191,12 @@ def calculate_average_episode_return(evaluation_history, gamma):
 
 def import_mushroom_globally():
     # Importing the necessary modules
+    # Doing it here because it takes a long time to import
+    # and it will give a bad impression of the program if
+    # it takes a long time to start up
     from mushroom_rl.core import Environment, MDPInfo
     from mushroom_rl.core.agent import Agent
-    from mushroom_rl.algorithms.value import QLearning
+    from mushroom_rl.algorithms.value import QLearning, SARSA
     from mushroom_rl.policy import EpsGreedy
     from mushroom_rl.utils.parameters import Parameter
     from mushroom_rl.core import Core
@@ -1151,6 +1207,7 @@ def import_mushroom_globally():
     globals()['MDPInfo'] = MDPInfo
     globals()['Agent'] = Agent
     globals()['QLearning'] = QLearning
+    globals()['SARSA'] = SARSA
     globals()['EpsGreedy'] = EpsGreedy
     globals()['Parameter'] = Parameter
     globals()['Core'] = Core
