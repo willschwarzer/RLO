@@ -53,7 +53,9 @@ def pack_things_in_order(show_reward=False,
     solver_menu.pack_forget()
     show_value_function_button.pack_forget()
     show_optimal_policy_button.pack_forget()
-    gamma_entry.pack_forget()
+    # gamma_entry.pack_forget()
+    # gamma_label.pack_forget()
+    alg_hyperparams_button.pack_forget()
     
     if show_action_menu:
         action_menu.pack()
@@ -77,8 +79,7 @@ def pack_things_in_order(show_reward=False,
         solver_menu.pack()
         # gamma_entry.pack()
         # pack gamma label to the left of the entry
-        gamma_label.pack()
-        gamma_entry.pack()
+        alg_hyperparams_button.pack()
         # gamma_label.grid(row=1, column=0)
         # gamma_entry.grid(row=1, column=1)
         solve_button.pack()
@@ -1121,26 +1122,27 @@ def solve():
         
         MushroomGridworld = define_gridworld()
         gridworld = MushroomGridworld(grid_state, gamma)
-        epsilon = Parameter(value=0.1)
-        policy = EpsGreedy(epsilon=epsilon)
-        learning_rate = Parameter(value=0.1)
+        # epsilon = Parameter(value=0.1)
+        epsilon_param = Parameter(epsilon)
+        policy = EpsGreedy(epsilon=epsilon_param)
+        # learning_rate = Parameter(value=0.1)
+        learning_rate_param = Parameter(learning_rate)
         if solver_menu.get() == 'Q-Learning':
             agent = QLearning(mdp_info=gridworld.info, 
                                 policy=policy,
-                                learning_rate=learning_rate,)
+                                learning_rate=learning_rate_param,)
         elif solver_menu.get() == 'SARSA':
             agent = SARSA(mdp_info=gridworld.info, 
                                 policy=policy,
-                                learning_rate=learning_rate,)
+                                learning_rate=learning_rate_param,)
         else:
             update_status(f"Invalid algorithm: {solver_menu.get()}", color="red")
             # pack the status label
             status_label.pack()
             return
         core = Core(agent, gridworld)
-        num_epochs = 10
         # for epoch in range(num_epochs):
-        num_epochs = 1000  # Total number of epochs
+        # num_epochs = 1000  # Total number of epochs
         episodes_per_epoch = 1  # Number of episodes per epoch
 
         rets = []
@@ -1190,7 +1192,9 @@ def plot_learning_curves(learning_curve, durations, algorithm):
     plt.plot(durations)
     plt.xlabel('Episodes')
     plt.ylabel('Duration')
-    plt.title('Duration Curve for ' + algorithm)
+    # plt.title('Duration Curve for ' + algorithm)
+    # add hyperparameters to title
+    plt.title(f"Duration Curve for {algorithm} (gamma={gamma}, epsilon={epsilon}, learning_rate={learning_rate})")
     plt.savefig(dur_filename)
 
     # Create and save the plot
@@ -1198,7 +1202,9 @@ def plot_learning_curves(learning_curve, durations, algorithm):
     plt.plot(learning_curve)
     plt.xlabel('Episodes')
     plt.ylabel('Return')
-    plt.title('Learning Curve for ' + algorithm)
+    # plt.title('Learning Curve for ' + algorithm)
+    # add hyperparameters to title
+    plt.title(f"Learning Curve for {algorithm} (gamma={gamma}, epsilon={epsilon}, learning_rate={learning_rate})")
     plt.savefig(ret_filename)
 
     # Update the status to indicate where the file was saved
@@ -1382,6 +1388,106 @@ def define_gridworld():
             return self._mdp_info
         
     return MushroomGridworld
+
+num_epochs = 1000
+learning_rate = 0.1
+epsilon = 0.1
+gamma = 0.9
+
+def show_alg_hyperparams_menu():
+    global num_epochs, learning_rate, epsilon, gamma
+    # Create a new top-level window
+    hyperparams_window = tk.Toplevel(root)
+    hyperparams_window.title("Algorithm Hyperparameters")
+
+    # Hyperparameters to be set
+    # num_epochs_var = tk.IntVar(value=1000)  # Default number of epochs
+    # learning_rate_var = tk.DoubleVar(value=0.1)  # Default learning rate
+    # epsilon_var = tk.DoubleVar(value=0.1)  # Default epsilon for EpsGreedy
+    # gamma_var = tk.DoubleVar(value=0.9)  # Default gamma
+    num_epochs_var = tk.IntVar(value=num_epochs)  # Default number of epochs
+    learning_rate_var = tk.DoubleVar(value=learning_rate)  # Default learning rate
+    epsilon_var = tk.DoubleVar(value=epsilon)  # Default epsilon for EpsGreedy
+    gamma_var = tk.DoubleVar(value=gamma)  # Default gamma
+
+    # Function to update hyperparameters
+    def update_hyperparams():
+        global num_epochs, learning_rate, epsilon, gamma
+        num_epochs = num_epochs_var.get()
+        learning_rate = learning_rate_var.get()
+        epsilon = epsilon_var.get()
+        gamma = gamma_var.get()
+        hyperparams_window.destroy()
+
+    # Validation functions
+    def validate_num_epochs(*args):
+        try:
+            if num_epochs_var.get() < 1:
+                num_epochs_var.set(1)
+        except:
+            # num_epochs_var.set(1000)  # Reset to default if invalid input
+            pass
+
+    def validate_learning_rate(*args):
+        try:
+            value = learning_rate_var.get()
+            # if not 0 < value < 1:
+            #     learning_rate_var.set(0.1)
+            if value > 1:
+                learning_rate_var.set(1.0)
+            elif value < 0:
+                learning_rate_var.set(0.0)
+        except:
+            # learning_rate_var.set(0.1)  # Reset to default if invalid input
+            pass
+
+    def validate_epsilon(*args):
+        try:
+            value = epsilon_var.get()
+            # if not 0 < value < 1:
+            #     epsilon_var.set(0.1)
+            if value > 1:
+                epsilon_var.set(1.0)
+            elif value < 0:
+                epsilon_var.set(0.0)
+        except:
+            # epsilon_var.set(0.1)  # Reset to default if invalid input
+            pass
+
+    def validate_gamma(*args):
+        try:
+            value = gamma_var.get()
+            if value > 1:
+                gamma_var.set(1.0)
+            elif value < 0:
+                gamma_var.set(0.0)
+        except:
+            # gamma_var.set(0.9)  # Reset to default if invalid input
+            pass
+
+    # Attaching the validation function to the trace method of variables
+    num_epochs_var.trace('w', validate_num_epochs)
+    learning_rate_var.trace('w', validate_learning_rate)
+    epsilon_var.trace('w', validate_epsilon)
+    gamma_var.trace('w', validate_gamma)
+
+    # Creating labels and entry widgets for each hyperparameter
+    tk.Label(hyperparams_window, text="Number of Epochs:").grid(row=0, column=0)
+    tk.Entry(hyperparams_window, textvariable=num_epochs_var).grid(row=0, column=1)
+
+    tk.Label(hyperparams_window, text="Learning Rate:").grid(row=1, column=0)
+    tk.Entry(hyperparams_window, textvariable=learning_rate_var).grid(row=1, column=1)
+
+    tk.Label(hyperparams_window, text="Epsilon:").grid(row=2, column=0)
+    tk.Entry(hyperparams_window, textvariable=epsilon_var).grid(row=2, column=1)
+
+    tk.Label(hyperparams_window, text="Gamma:").grid(row=3, column=0)
+    tk.Entry(hyperparams_window, textvariable=gamma_var).grid(row=3, column=1)
+
+    # Button to update hyperparameters
+    update_button = tk.Button(hyperparams_window, text="Update Hyperparameters", command=update_hyperparams)
+    update_button.grid(row=4, columnspan=2)
+
 
 def value_iteration(grid_state, discount_factor=0.9, theta=0.0001):
     """
@@ -1576,30 +1682,32 @@ solver_menu.current(0)
 
 # text field for setting gamma/discount factor
 
-gamma = 0.9
-gamma_var = tk.StringVar(value=f"{gamma:.5g}")
-def update_gamma(name, *args):
-    global gamma
-    # Handle negative probabilities
-    try:
-        gamma = float(gamma_var.get())
-        if gamma < 0:
-            gamma = 0.0
-            gamma_var.set(f"{gamma:.5g}")
-        if gamma > 1:
-            gamma = 1.0
-            gamma_var.set(f"{gamma:.5g}")
-    except:
-        pass
-# just use a trace
-gamma_entry = tk.Entry(root, textvariable=gamma_var)
-gamma_var.trace("w", update_gamma)
+# gamma = 0.9
+# gamma_var = tk.StringVar(value=f"{gamma:.5g}")
+# def update_gamma(name, *args):
+#     global gamma
+#     # Handle negative probabilities
+#     try:
+#         gamma = float(gamma_var.get())
+#         if gamma < 0:
+#             gamma = 0.0
+#             gamma_var.set(f"{gamma:.5g}")
+#         if gamma > 1:
+#             gamma = 1.0
+#             gamma_var.set(f"{gamma:.5g}")
+#     except:
+#         pass
+# # just use a trace
+# gamma_entry = tk.Entry(root, textvariable=gamma_var)
+# gamma_var.trace("w", update_gamma)
 
 # label for gamma text field
-gamma_label = tk.Label(root, text="Discount Factor (Gamma):")
+# gamma_label = tk.Label(root, text="Discount Factor (Gamma):")
 
 show_optimal_policy_button = tk.Button(root, text="Show Policy", command=show_policy)
 show_value_function_button = tk.Button(root, text="Show Value Function", command=show_value_function)
+
+alg_hyperparams_button = tk.Button(root, text="Modify Algorithm Hyperparameters", command=show_alg_hyperparams_menu)
 
 # Hide reward-related UI at the start
 update_ui()
