@@ -12,7 +12,9 @@ It currently supports the following features:
 * Running Q-learning and SARSA with user-defined number of episodes, learning rate and exploration rate epsilon, outputting graphs
 
 ## Installation
-Start off by running `pip install -r requirements.txt` or `python -m pip install -r requirements.txt` to install the required packages. (It takes a while; sorry about that. We're using the `mushroom_rl` package for the Q-learning and SARSA algorithms, and it has way too many dependencies.) If you get an import error in opencv-python (cv2), please run `sudo apt install libgl1-mesa-glx` and try again - if that doesn't work or you're on Windows or Mac and still get this error, please email Will the TA.
+Start off by running `pip install -r requirements.txt` or `python -m pip install -r requirements.txt` to install the required packages. (It takes a while; sorry about that. We're using the `mushroom_rl` package for the Q-learning and SARSA algorithms, and it has way too many dependencies.) 
+
+If you get an import error in opencv-python (cv2), please run `sudo apt install libgl1-mesa-glx` and try again - if that doesn't work or you're on Windows or Mac and still get this error, please email Will the TA.
 
 ## Usage
 Run `python gridworld.py` to start the program. 
@@ -29,12 +31,12 @@ Click "specify transition probabilities". To start, we recommend clicking the "S
 
 #### An example of how the default transition probabilities menu works
 Let's say you want to set the default transition probabilities to be the 687-Gridworld values from the homework and lecture. You would click the "Set Default Transition Probabilities" button, then enter the following values:
-Forward: 0.8. This means that the agent has an 80% chance of moving in the direction it attempts to move in. Thus, action 0, attempt right, will move it to the right with 80% probability when it is possible to do so, and so on.
-Slip right: 0.05. This means that the agent has a 5% chance of moving one direction clockwise from the direction it attempts to move in. Thus, action 0, attempt right, will move it down with 5% probability when it is possible to do so, and so on.
-Slip left: 0.05. Similar to slip right, but counterclockwise.
-Slip backwards: 0. This is not used in the 687-Gridworld, but the idea is similar: the agent has a 0% chance of moving in the opposite direction from the direction it attempts to move in.
-Stay: 0.1. This means that the agent has a 10% chance of staying in the same place, added to the probabilities of transitions that hit a wall or go out of bounds.
-Terminate: 0. This allows a constant probability of terminating at every time step. You can actually prove that you only need either this probability or $\gamma$: you never need to set both. Do you see why?
+* Forward: 0.8. This means that the agent has an 80% chance of moving in the direction it attempts to move in. Thus, action 0, attempt right, will move it to the right with 80% probability when it is possible to do so, and so on.
+* Slip right: 0.05. This means that the agent has a 5% chance of moving one direction clockwise from the direction it attempts to move in. Thus, action 0, attempt right, will move it down with 5% probability when it is possible to do so, and so on.
+* Slip left: 0.05. Similar to slip right, but counterclockwise.
+* Slip backwards: 0. This is not used in the 687-Gridworld, but the idea is similar: the agent has a 0% chance of moving in the opposite direction from the direction it attempts to move in.
+* Stay: 0.1. This means that the agent has a 10% chance of staying in the same place, added to the probabilities of transitions that hit a wall or go out of bounds.
+* Terminate: 0. This allows a constant probability of terminating at every time step. You can actually prove that you only need either this probability or $\gamma$: you never need to set both. Do you see why?
 #### Visualizing the Transition Function
 Click "Draw Transition Arrows" to visualize your defined transition function. Every arrow represents one of the possible transitions that the chosen action can produce in each state, with circles representing staying and crosses representing termination. If this looks messy, it's because the transitions are stochastic, so a lot of transitions are possible in each state with each action.
 ### Running algorithms
