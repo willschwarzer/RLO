@@ -20,6 +20,25 @@ root.title("Gridworld Generator")
 # Create a canvas for the grid
 canvas = tk.Canvas(root, width=GRID_WIDTH * CELL_SIZE, height=GRID_HEIGHT * CELL_SIZE)
 
+# Variables to store settings
+colorblind_mode = tk.BooleanVar(value=False)
+grid_size = tk.IntVar(value=20)
+
+# Create menu bar
+menubar = tk.Menu(root)
+root.config(menu=menubar)
+
+# Create a "Settings" dropdown menu
+settings_menu = tk.Menu(menubar, tearoff=0)
+menubar.add_cascade(label="Settings", menu=settings_menu)
+
+# Add options to the "Settings" dropdown
+settings_menu.add_checkbutton(label="Enable Colorblind Mode", variable=colorblind_mode)
+'''settings_menu.add_separator()
+settings_menu.add_radiobutton(label="Small Grid Size", variable=grid_size, value=5)
+settings_menu.add_radiobutton(label="Medium Grid Size", variable=grid_size, value=10)
+settings_menu.add_radiobutton(label="Large Grid Size", variable=grid_size, value=20)'''
+
 # Create a 2D list to store the cell items
 cells = [[None for _ in range(GRID_WIDTH)] for _ in range(GRID_HEIGHT)]
 
@@ -94,7 +113,7 @@ def get_color_by_reward(reward):
     global max_abs_reward
     # Calculate saturation based on the magnitude of the reward
     saturation = abs(reward) / (max_abs_reward + 1e-6)
-    base_color = 'green' if reward > 0 else ('red' if reward < 0 else 'white')
+    base_color = good_color() if reward > 0 else (bad_color() if reward < 0 else 'white')
     if base_color == 'white':
         return base_color
     return get_saturated_color(base_color, saturation)
@@ -136,10 +155,19 @@ grid = [[{'color': get_color_by_reward(0.0), 'reward': 0.0} for _ in range(GRID_
 drawing = False
 reward_mode = False
 
+
+def good_color():
+    return 'green' if not colorblind_mode.get() else 'blue'
+
+
+def bad_color():
+    return 'red' if not colorblind_mode.get() else 'yellow'
+
+
 def get_color_by_value(value, max_abs_value):
     # Calculate saturation based on the magnitude of the value
     saturation = abs(value) / (max_abs_value + 1e-6)
-    base_color = 'green' if value > 0 else ('red' if value < 0 else 'white')
+    base_color = good_color() if value > 0 else (bad_color() if value < 0 else 'white')
     if base_color == 'white':
         return base_color
     return get_saturated_color(base_color, saturation)
@@ -170,6 +198,12 @@ def get_saturated_color(base_color, saturation):
         additional_value = int(255 * (1 - saturation))
         r = additional_value
         g = additional_value
+    elif base_color == "yellow":
+        # Full yellow, adjust blue
+        r = 255
+        g = 255
+        additional_value = int(255 * (1 - saturation))
+        b = additional_value
     else:
         return '#FFFFFF'  # Fallback to white if an unrecognized color is passed
     return f'#{r:02x}{g:02x}{b:02x}'  # Return the hex color code
@@ -910,6 +944,7 @@ def draw(event):
                 grid_state.setStartingProb(row, col, 0.0)
             last_toggled_cell = current_cell
             update_grid()
+
                 
 
 def set_reward(event):
@@ -1111,6 +1146,31 @@ optimal_policy = None
 optimal_value_function = None
 learned_policy = None
 learned_value_function = None
+
+colorblind_mode.trace("w", lambda *_: update_grid())
+
+
+def update_size(*args):
+    canvas.config(width=grid_size.get() * CELL_SIZE, height=grid_size.get() * CELL_SIZE)
+    global GRID_WIDTH, GRID_HEIGHT, optimal_policy, optimal_value_function, learned_policy, learned_value_function, showing_policy, showing_value_function
+    showing_policy = False
+    showing_value_function = False
+    optimal_policy = None
+    optimal_value_function = None
+    learned_policy = None
+    learned_value_function = None
+    for row in range(grid_size.get()-1, GRID_HEIGHT):
+        for col in range(grid_size.get()-1, GRID_WIDTH):
+            grid_state.setActiveGridCoord(row, col, False)
+            grid_state.setReward(row, col, 0.0)
+            grid_state.setStartingProb(row, col, 0.0)
+            grid[row][col]['color'] = 'black'
+            print(grid_state.isActive(row, col))
+    update_grid()
+    print('huuh')
+
+
+grid_size.trace("w", update_size)
 
 def solve():
     global optimal_policy, optimal_value_function, learned_policy, learned_value_function
