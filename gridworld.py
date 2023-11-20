@@ -492,7 +492,7 @@ class TransitionProbabilitiesFrame(tk.Frame):
         for prob_var in self.prob_vars:
             prob_var.trace("w", self.update_probs)
 
-        standard_actions_button = tk.Button(self, text="Use Slippery Gridworld Transitions", command=open_standard_actions_settings)
+        standard_actions_button = tk.Button(self, text="Set Default Transition Probabilities", command=open_standard_actions_settings)
         standard_actions_button.grid(row=3, columnspan=4)  # Adjust row and columnspan according to your layout
 
         # self.use_standard_action_probs_button = tk.Button(self, 
