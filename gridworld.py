@@ -1116,7 +1116,7 @@ def update_ui():
     elif mode.lower() == "solve mode":
         pack_things_in_order(show_solve_stuff=True)
         # button text
-        show_optimal_policy_button.config(text="Hide Optimal Policy" if showing_policy else "Show Optimal Policy")
+        show_optimal_policy_button.config(text="Hide Policy" if showing_policy else "Show Policy")
         # show policy if we're showing policy
         if showing_policy:
             show_policy()
