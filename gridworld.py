@@ -666,6 +666,13 @@ def cell_click(event, row, col):
     mode = modes[mode_var.get()]
 
     if mode == "Select Mode":
+        global optimal_policy, optimal_value_function, learned_policy, learned_value_function, showing_policy, showing_value_function
+        showing_policy = False
+        showing_value_function = False
+        optimal_policy = None
+        optimal_value_function = None
+        learned_policy = None
+        learned_value_function = None
         grid_state.setActiveGridCoord(row, col, not eraser_active)
         if not grid_state.isActive(row, col): # if no longer active, set reward to 0
             grid_state.setReward(row, col, 0.0)
@@ -971,14 +978,18 @@ def toggle_eraser():
 def update_grid():
     mode = modes[mode_var.get()]
     # show optimal value function if in solve mode and using Value Iteration
-    if mode == "Solve Mode" and showing_value_function:
-        if solver_menu.get() == 'Value Iteration' and optimal_value_function is not None:
-            value_function = optimal_value_function
-        elif learned_value_function is not None:
-            value_function = learned_value_function
+    if mode == "Solve Mode":
+        if optimal_value_function is not None:
+            if solver_menu.get() == 'Value Iteration':
+                value_function = optimal_value_function
+                policy = optimal_policy
+            else:
+                value_function = learned_value_function
+                policy = learned_policy
+            max_abs_value = np.abs(value_function).max()
         else:
             value_function = None
-        max_abs_value = np.abs(value_function).max()
+
         #     max_abs_value = np.abs(optimal_value_function).max()
         # else:
         #     max_abs_value = np.abs(learned_value_function).max()
@@ -997,6 +1008,10 @@ def update_grid():
             else:
                 cell_color = 'black'  # Set the color to black if the cell is unselected
             canvas.itemconfig(cells[row][col], fill=cell_color)
+    if mode == "Solve Mode" and showing_policy:
+        delete_arrows()
+        draw_policy(policy)
+
             
 def update_ui():
     global selected_cell, highlighted_cell, eraser_active, arrows_visible, showing_value_function
@@ -1578,6 +1593,16 @@ def value_iteration(grid_state, discount_factor=0.9, theta=0.0001):
 
 showing_policy = False
 
+def draw_policy(policy):
+    for row in range(GRID_HEIGHT):
+        for col in range(GRID_WIDTH):
+            if grid_state.isActive(row, col):
+                best_action = np.argmax(policy[row, col, :])
+                # figure out which direction is most likely after taking the best action
+                transition_probs = grid_state.actions[row, col, best_action, :]
+                direction = np.argmax(transition_probs)
+                draw_policy_arrow(row, col, direction)
+
 def show_policy():
     global arrows_visible, showing_policy
     if solver_menu.get() == 'Value Iteration':
@@ -1600,18 +1625,10 @@ def show_policy():
     showing_policy = not showing_policy
 
     if showing_policy:
-        for row in range(GRID_HEIGHT):
-            for col in range(GRID_WIDTH):
-                if grid_state.isActive(row, col):
-                    best_action = np.argmax(policy[row, col, :])
-                    # figure out which direction is most likely after taking the best action
-                    transition_probs = grid_state.actions[row, col, best_action, :]
-                    direction = np.argmax(transition_probs)
-                    draw_policy_arrow(row, col, direction)
+        draw_policy(policy)
         # change the button text
         show_optimal_policy_button.config(text="Hide Policy")
     else:
-        delete_arrows()
         # change the button text
         show_optimal_policy_button.config(text="Show Policy")
     arrows_visible = False
