@@ -33,7 +33,7 @@ settings_menu = tk.Menu(menubar, tearoff=0)
 menubar.add_cascade(label="Settings", menu=settings_menu)
 
 # Add options to the "Settings" dropdown
-settings_menu.add_checkbutton(label="Enable Colorblind Mode", variable=colorblind_mode)
+settings_menu.add_checkbutton(label="Enable Red-Green Colorblind Mode", variable=colorblind_mode)
 '''settings_menu.add_separator()
 settings_menu.add_radiobutton(label="Small Grid Size", variable=grid_size, value=5)
 settings_menu.add_radiobutton(label="Medium Grid Size", variable=grid_size, value=10)
@@ -1014,16 +1014,16 @@ def update_grid():
     mode = modes[mode_var.get()]
     # show optimal value function if in solve mode and using Value Iteration
     if mode == "Solve Mode":
-        if optimal_value_function is not None:
             if solver_menu.get() == 'Value Iteration':
                 value_function = optimal_value_function
                 policy = optimal_policy
             else:
                 value_function = learned_value_function
                 policy = learned_policy
-            max_abs_value = np.abs(value_function).max()
-        else:
-            value_function = None
+            if value_function is not None:
+                max_abs_value = np.abs(value_function).max()
+    else:
+        value_function = None
 
         #     max_abs_value = np.abs(optimal_value_function).max()
         # else:
@@ -1196,7 +1196,7 @@ def solve():
             import_mushroom_globally()
         
         MushroomGridworld = define_gridworld()
-        gridworld = MushroomGridworld(grid_state, gamma)
+        gridworld = MushroomGridworld(grid_state, gamma, horizon)
         # epsilon = Parameter(value=0.1)
         epsilon_param = Parameter(epsilon)
         policy = EpsGreedy(epsilon=epsilon_param)
@@ -1215,6 +1215,11 @@ def solve():
             # pack the status label
             status_label.pack()
             return
+        # agent.Q = Table(gridworld.info.size, initial_q)
+        # this apparently doesn't work, so we'll go and set the Q table manually
+        for row in range(GRID_HEIGHT):
+            for col in range(GRID_WIDTH):
+                agent.Q.table[GRID_WIDTH * row + col] = initial_q
         core = Core(agent, gridworld)
         # for epoch in range(num_epochs):
         # num_epochs = 1000  # Total number of epochs
@@ -1318,6 +1323,7 @@ def import_mushroom_globally():
     # Doing it here because it takes a long time to import
     # and it will give a bad impression of the program if
     # it takes a long time to start up
+    print("Running first-time import of MushroomRL (this may take a while)")
     from mushroom_rl.core import Environment, MDPInfo
     from mushroom_rl.core.agent import Agent
     from mushroom_rl.algorithms.value import QLearning, SARSA
@@ -1325,6 +1331,8 @@ def import_mushroom_globally():
     from mushroom_rl.utils.parameters import Parameter
     from mushroom_rl.core import Core
     from mushroom_rl.utils.spaces import Discrete
+    from mushroom_rl.utils.table import Table
+    print("Done importing MushroomRL")
 
     # Adding them to the global namespace
     globals()['Environment'] = Environment
@@ -1336,10 +1344,11 @@ def import_mushroom_globally():
     globals()['Parameter'] = Parameter
     globals()['Core'] = Core
     globals()['Discrete'] = Discrete
+    globals()['Table'] = Table
 
 def define_gridworld():
     class MushroomGridworld(Environment):
-        def __init__(self, grid_state, gamma):
+        def __init__(self, grid_state, gamma, horizon):
             self.gridworld = grid_state
             n_states = 100
             n_actions = 4
@@ -1354,7 +1363,7 @@ def define_gridworld():
             min_rew = np.min(self.gridworld.rewards)
             max_rew = np.max(self.gridworld.rewards)
             # reward_range = (min_rew, max_rew)
-            horizon = 1e2 # I don't think we need finite horizon here, but doing it anyway for debugging
+            horizon = horizon # It seems that we don't need to store this except for the MDPInfo
 
             # Set the MDP information
             self._mdp_info = MDPInfo(self._state_space, 
@@ -1468,9 +1477,11 @@ num_epochs = 1000
 learning_rate = 0.1
 epsilon = 0.1
 gamma = 0.9
+initial_q = 0.0
+horizon = 100
 
 def show_alg_hyperparams_menu():
-    global num_epochs, learning_rate, epsilon, gamma
+    global num_epochs, learning_rate, epsilon, gamma, initial_q, horizon
     # Create a new top-level window
     hyperparams_window = tk.Toplevel(root)
     hyperparams_window.title("Algorithm Hyperparameters")
@@ -1484,14 +1495,18 @@ def show_alg_hyperparams_menu():
     learning_rate_var = tk.DoubleVar(value=learning_rate)  # Default learning rate
     epsilon_var = tk.DoubleVar(value=epsilon)  # Default epsilon for EpsGreedy
     gamma_var = tk.DoubleVar(value=gamma)  # Default gamma
+    initial_q_var = tk.DoubleVar(value=initial_q)  # Default initial Q value
+    horizon_var = tk.IntVar(value=horizon)  # Default horizon
 
     # Function to update hyperparameters
     def update_hyperparams():
-        global num_epochs, learning_rate, epsilon, gamma
+        global num_epochs, learning_rate, epsilon, gamma, initial_q, horizon
         num_epochs = num_epochs_var.get()
         learning_rate = learning_rate_var.get()
         epsilon = epsilon_var.get()
         gamma = gamma_var.get()
+        initial_q = initial_q_var.get()
+        horizon = horizon_var.get()
         hyperparams_window.destroy()
 
     # Validation functions
@@ -1540,28 +1555,50 @@ def show_alg_hyperparams_menu():
             # gamma_var.set(0.9)  # Reset to default if invalid input
             pass
 
+    def validate_initial_q(*args):
+        try:
+            initial_q_var.get()
+        except:
+            pass
+
+    def validate_horizon(*args):
+        try:
+            value = horizon_var.get()
+            if value < 1:
+                horizon_var.set(1)
+        except:
+            pass
+
     # Attaching the validation function to the trace method of variables
     num_epochs_var.trace('w', validate_num_epochs)
     learning_rate_var.trace('w', validate_learning_rate)
     epsilon_var.trace('w', validate_epsilon)
     gamma_var.trace('w', validate_gamma)
+    initial_q_var.trace('w', validate_initial_q)
+    horizon_var.trace('w', validate_horizon)
 
     # Creating labels and entry widgets for each hyperparameter
-    tk.Label(hyperparams_window, text="Number of Epochs:").grid(row=0, column=0)
+    tk.Label(hyperparams_window, text="Number of Episodes:").grid(row=0, column=0)
     tk.Entry(hyperparams_window, textvariable=num_epochs_var).grid(row=0, column=1)
 
-    tk.Label(hyperparams_window, text="Learning Rate:").grid(row=1, column=0)
-    tk.Entry(hyperparams_window, textvariable=learning_rate_var).grid(row=1, column=1)
+    tk.Label(hyperparams_window, text="Horizon length").grid(row=1, column=0)
+    tk.Entry(hyperparams_window, textvariable=horizon_var).grid(row=1, column=1)
 
-    tk.Label(hyperparams_window, text="Epsilon:").grid(row=2, column=0)
-    tk.Entry(hyperparams_window, textvariable=epsilon_var).grid(row=2, column=1)
+    tk.Label(hyperparams_window, text="Learning Rate:").grid(row=2, column=0)
+    tk.Entry(hyperparams_window, textvariable=learning_rate_var).grid(row=2, column=1)
 
-    tk.Label(hyperparams_window, text="Gamma:").grid(row=3, column=0)
-    tk.Entry(hyperparams_window, textvariable=gamma_var).grid(row=3, column=1)
+    tk.Label(hyperparams_window, text="Epsilon:").grid(row=3, column=0)
+    tk.Entry(hyperparams_window, textvariable=epsilon_var).grid(row=3, column=1)
+
+    tk.Label(hyperparams_window, text="Initial Q Values:").grid(row=4, column=0)
+    tk.Entry(hyperparams_window, textvariable=initial_q_var).grid(row=4, column=1)
+
+    tk.Label(hyperparams_window, text="Gamma:").grid(row=5, column=0)
+    tk.Entry(hyperparams_window, textvariable=gamma_var).grid(row=5, column=1)
 
     # Button to update hyperparameters
     update_button = tk.Button(hyperparams_window, text="Update Hyperparameters", command=update_hyperparams)
-    update_button.grid(row=4, columnspan=2)
+    update_button.grid(row=6, columnspan=2)
 
 
 def value_iteration(grid_state, discount_factor=0.9, theta=0.0001):
@@ -1701,8 +1738,22 @@ def show_value_function():
     # change the button text
     if showing_value_function:
         show_value_function_button.config(text="Hide Value Function")
+
+        if solver_menu.get() == 'Value Iteration':
+            d_0 = grid_state.startingProbs
+            if not np.any(d_0):
+                update_status("Please set starting probabilities to see J*", color="green")
+                status_label.pack()
+            else:
+                J_star = np.sum(d_0 * optimal_value_function)
+                update_status(f"J* = {J_star}", color="green")
+                status_label.pack()
     else:
         show_value_function_button.config(text="Show Value Function")
+        # if the status label is showing J*, hide it
+        if "J*" in status_label.cget("text"):
+            update_status("")
+            status_label.pack_forget()
     update_grid()
 
 def draw_policy_arrow(row, col, action):
