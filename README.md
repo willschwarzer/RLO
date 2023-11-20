@@ -12,7 +12,9 @@ It currently supports the following features:
 * Running Q-learning and SARSA with user-defined number of episodes, learning rate and exploration rate epsilon, outputting graphs
 
 ## Installation
-Start off by running `pip install -r requirements.txt` or `python -m pip install -r requirements.txt` to install the required packages. (It takes a while; sorry about that. We're using the `mushroom_rl` package for the Q-learning and SARSA algorithms, and it has way too many dependencies.) If you get an import error in opencv-python (cv2), please run `sudo apt install libgl1-mesa-glx` and try again - if that doesn't work or you're on Windows or Mac and still get this error, please email Will the TA.
+Start off by running `pip install -r requirements.txt` or `python -m pip install -r requirements.txt` to install the required packages. (It takes a while; sorry about that. We're using the `mushroom_rl` package for the Q-learning and SARSA algorithms, and it has way too many dependencies.) 
+
+If you get an import error in opencv-python (cv2), please run `sudo apt install libgl1-mesa-glx` and try again - if that doesn't work or you're on Windows or Mac and still get this error, please email Will the TA.
 
 ## Usage
 Run `python gridworld.py` to start the program. 
