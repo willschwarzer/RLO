@@ -4,10 +4,6 @@ RLO_RL.egg-info/PKG-INFO
 RLO_RL.egg-info/SOURCES.txt
 RLO_RL.egg-info/dependency_links.txt
 RLO_RL.egg-info/top_level.txt
-controller/__init__.py
-controller/actor.py
 model/__init__.py
 model/grid.py
 model/settings.py
-view/__init__.py
-view/view.py
