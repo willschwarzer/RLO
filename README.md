@@ -37,7 +37,7 @@ Let's say you want to set the default transition probabilities to be the 687-Gri
 * Slip right: 0.05. This means that the agent has a 5% chance of moving one direction clockwise from the direction it attempts to move in. Thus, action 0, attempt right, will move it down with 5% probability when it is possible to do so, and so on.
 * Slip left: 0.05. Similar to slip right, but counterclockwise.
 * Slip backwards: 0. This is not used in the 687-Gridworld, but the idea is similar: the agent has a 0% chance of moving in the opposite direction from the direction it attempts to move in.
-* Stay: 0.1. This means that the agent has a 10% chance of staying in the same place, added to the probabilities of transitions that hit a wall or go out of bounds.
+* Stay: 0.1. This means that the agent has a 10% chance of staying in the same place, added to the probabilities of transitions that hit a wall or go out of bounds. This is always set to be one minus the sum of the other probabilities.
 * Terminate: 0. This allows a constant probability of terminating at every time step. You can actually prove that you only need either this probability or $\gamma$: you never need to set both. Do you see why?
 #### Visualizing the Transition Function
 Click "Draw Transition Arrows" to visualize your defined transition function. Every arrow represents one of the possible transitions that the chosen action can produce in each state, with circles representing staying and crosses representing termination. If this looks messy, it's because the transitions are stochastic, so a lot of transitions are possible in each state with each action.
