@@ -1,9 +1,0 @@
-README.md
-setup.py
-RLO_RL.egg-info/PKG-INFO
-RLO_RL.egg-info/SOURCES.txt
-RLO_RL.egg-info/dependency_links.txt
-RLO_RL.egg-info/top_level.txt
-model/__init__.py
-model/grid.py
-model/settings.py
