@@ -46,3 +46,6 @@ Note that the value function and policy shown will be the learned ones if you ch
 
 ## Accessibility
 Click on settings --> Enable Red-Green Colorblind Mode to replace red and green with blue and yellow.
+
+## Credit
+Made by Andrew Yuan, Max Hamilton, Oindrila Saha and Will Schwarzer. And ChatGPT.
