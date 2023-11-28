@@ -29,6 +29,8 @@ Click "specify transition probabilities". To start, we recommend clicking the "S
 
 **Important**: every time you use the "Set Default Transition Probabilities" button, all transition probabilities are reset to their default values, *including* termination probabilities. You will have to reset the terminal states each time you use this button. Sorry.
 
+**Also important**: Apply your default transition probabilities again each time you add states to your MDP (so, yes, also set terminal states again. Sorry).
+
 #### An example of how the default transition probabilities menu works
 Let's say you want to set the default transition probabilities to be the 687-Gridworld values from the homework and lecture. You would click the "Set Default Transition Probabilities" button, then enter the following values:
 * Forward: 0.8. This means that the agent has an 80% chance of moving in the direction it attempts to move in. Thus, action 0, attempt right, will move it to the right with 80% probability when it is possible to do so, and so on.
