@@ -9,7 +9,7 @@ It currently supports the following features:
 * Defining four actions to have any probability of transitioning to an adjacent state, staying still, or terminating. This can be done either manually or using default slippery actions in every state (see below for details).
 * Defining $\gamma$
 * Running value iteration on the MDP to determine $V^\*$ and $\pi^\*$
-* Running Q-learning and SARSA with user-defined number of episodes, learning rate and exploration rate epsilon, outputting graphs
+* Running Q-learning and SARSA with user-defined number of episodes, learning rate, exploration rate epsilon, episode horizon, and initial Q values, outputting graphs at the end
 
 ## Installation
 Start off by running `pip install -r requirements.txt` or `python -m pip install -r requirements.txt` to install the required packages. (It takes a while; sorry about that. We're using the `mushroom_rl` package for the Q-learning and SARSA algorithms, and it has way too many dependencies.) 
@@ -17,7 +17,7 @@ Start off by running `pip install -r requirements.txt` or `python -m pip install
 If you get an import error in opencv-python (cv2), please run `sudo apt install libgl1-mesa-glx` and try again - if that doesn't work or you're on Windows or Mac and still get this error, please email Will the TA.
 
 ## Usage
-Run `python gridworld.py` to start the program. 
+Run `python gridworld.py` to start the program. **IMPORTANT**: there is currently no saving functionality, so try to do all of your work with a single MDP in one sitting, or don't close the program. Sorry.
 ### Creating a Gridworld
 You will be presented with a black screen; this represents every cell in the gridworld being a "wall" at the moment. To activate some cells and turn them into navigable spaces, simply click and drag. Note that agents can only transition to orthogonally adjacent cells, not diagonally adjacent ones. If you want to unselect cells (i.e., turn them back into walls), click the "unselect squares" button at the bottom.
 ### Defining the Reward Function
