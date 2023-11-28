@@ -1262,36 +1262,41 @@ def plot_learning_curves(learning_curve, durations, algorithm):
     # Ensure the 'experiments' folder exists
     folder_name = "experiments"
     os.makedirs(folder_name, exist_ok=True)
-    # Generate a filename based on the current time
     timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     ret_filename = f"{folder_name}/{algorithm}_learning_curve_{timestamp}.png"
     dur_filename = f"{folder_name}/{algorithm}_durations_{timestamp}.png"
 
-    # Create and save the plot
+    # Calculate EMA for the learning curve
+    N = 20  # Period for EMA
+    alpha = 2 / (N + 1)
+    ema_curve = [learning_curve[0]]  # Start EMA with the first value of the learning curve
+    for i in range(1, len(learning_curve)):
+        ema = alpha * learning_curve[i] + (1 - alpha) * ema_curve[-1]
+        ema_curve.append(ema)
+
+    # Create and save the learning curve plot with EMA
+    plt.figure()
+    plt.plot(learning_curve, label='Learning Curve')
+    plt.plot(ema_curve, label='EMA of Learning Curve', linestyle='--')
+    plt.xlabel('Episodes')
+    plt.ylabel('Return')
+    plt.title(f"Learning Curve for {algorithm} (gamma={gamma}, epsilon={epsilon}, learning_rate={learning_rate}, horizon={horizon}, initial_q={initial_q})")
+    plt.legend()
+    plt.savefig(ret_filename)
+
+    # Plot the duration curve
     plt.figure()
     plt.plot(durations)
     plt.xlabel('Episodes')
     plt.ylabel('Duration')
-    # plt.title('Duration Curve for ' + algorithm)
-    # add hyperparameters to title
-    plt.title(f"Duration Curve for {algorithm} (gamma={gamma}, epsilon={epsilon}, learning_rate={learning_rate})")
+    plt.title(f"Duration Curve for {algorithm} (gamma={gamma}, epsilon={epsilon}, learning_rate={learning_rate}, horizon={horizon}, initial_q={initial_q})")
     plt.savefig(dur_filename)
-
-    # Create and save the plot
-    plt.figure()
-    plt.plot(learning_curve)
-    plt.xlabel('Episodes')
-    plt.ylabel('Return')
-    # plt.title('Learning Curve for ' + algorithm)
-    # add hyperparameters to title
-    plt.title(f"Learning Curve for {algorithm} (gamma={gamma}, epsilon={epsilon}, learning_rate={learning_rate})")
-    plt.savefig(ret_filename)
 
     # Update the status to indicate where the file was saved
     update_status(f"Saved learning curve to {ret_filename}", color="green")
     status_label.pack()
 
-    # try to show the plot
+    # Try to show the plot
     try:
         plt.show()
     except:
