@@ -1284,6 +1284,12 @@ def plot_learning_curves(learning_curve, durations, algorithm):
     plt.legend()
     plt.savefig(ret_filename)
 
+    # Try to show the plot
+    try:
+        plt.show()
+    except:
+        return
+
     # Plot the duration curve
     plt.figure()
     plt.plot(durations)
@@ -1295,12 +1301,7 @@ def plot_learning_curves(learning_curve, durations, algorithm):
     # Update the status to indicate where the file was saved
     update_status(f"Saved learning curve to {ret_filename}", color="green")
     status_label.pack()
-
-    # Try to show the plot
-    try:
-        plt.show()
-    except:
-        return
+    
 
 def calculate_episode_stats(evaluation_history, gamma):
     episode_returns = []
